@@ -3,9 +3,7 @@
 using Sdl3Sharp.Utilities;
 using Sdl3Sharp.Video.Gpu;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Sdl3Sharp.Video.Rendering;
@@ -20,11 +18,70 @@ namespace Sdl3Sharp.Video.Rendering;
 /// to create a <see cref="GpuRenderState"/> without needing to create a separate <see cref="GpuRenderStateCreateInfo"/> instance.
 /// </para>
 /// </remarks>
-public sealed partial class GpuRenderStateCreateInfo : IDisposable
+public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 {
-	private NativeMemoryManager? mSamplerBindingsManager = null, mStorageTexturesManager = null, mStorageBuffersManager = null;
+	// GpuRenderStateCreateInfo also doubles as a way to keep the managed GpuTextureSamplerBinding instances, the GpuTexture instances, and the GpuBuffer instances alive
+	// that are referenced by this instances and used when creating a GpuRenderState,
+	// so that they don't get GC'd while the native SDL_GPURenderState may still reference their underlying native resources.
+
 	private SDL_GPURenderStateCreateInfo mCreateInfo = default;
-	private bool mFragmentShaderValid = false, mSamplerBindingsValid = false, mStorageTexturesValid = false, mStorageBuffersValid = false, mPropertiesValid = false;
+
+	/// <summary>
+	/// Creates a new <see cref="GpuRenderStateCreateInfo"/> with the specified fragment shader, additional fragment sampler bindings, storage textures, storage buffers, and optional properties for extensions
+	/// </summary>
+	/// <param name="fragmentShader">The fragment shader to use</param>
+	/// <param name="samplerBindings">The additional fragment sampler bindings</param>
+	/// <param name="storageTextures">The storage textures</param>
+	/// <param name="storageBuffers">The storage buffers</param>
+	/// <param name="properties">Optional properties for extensions</param>
+	/// <exception cref="ArgumentNullException"><paramref name="fragmentShader"/> is <c><see langword="null"/></c></exception>
+	/// <exception cref="InvalidOperationException">
+	/// Could not set the fragment sampler bindings
+	/// - OR -
+	/// Could not set the storage textures
+	/// - OR -
+	/// Could not set the storage buffers
+	/// </exception>
+	[SetsRequiredMembers]
+	public GpuRenderStateCreateInfo(GpuShader fragmentShader, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = null)
+		: this()
+	{
+		if (fragmentShader is null)
+		{
+			failFragmentShaderArgumentNull();
+		}
+
+		FragmentShader = fragmentShader;
+
+		if (!TrySetSamplerBindings(samplerBindings))
+		{
+			failCouldNotSetSamplerBindings();
+		}
+
+		if (!TrySetStorageTextures(storageTextures))
+		{
+			failCouldNotSetStorageTextures();
+		}
+
+		if (!TrySetStorageBuffers(storageBuffers))
+		{
+			failCouldNotSetStorageBuffers();
+		}
+
+		Properties = properties;
+
+		[DoesNotReturn]
+		static void failFragmentShaderArgumentNull() => throw new ArgumentNullException(nameof(fragmentShader));
+
+		[DoesNotReturn]
+		static void failCouldNotSetSamplerBindings() => throw new InvalidOperationException($"Could not set the fragment sampler bindings for the {nameof(GpuRenderStateCreateInfo)}");
+
+		[DoesNotReturn]
+		static void failCouldNotSetStorageTextures() => throw new InvalidOperationException($"Could not set the storage textures for the {nameof(GpuRenderStateCreateInfo)}");
+
+		[DoesNotReturn]
+		static void failCouldNotSetStorageBuffers() => throw new InvalidOperationException($"Could not set the storage buffers for the {nameof(GpuRenderStateCreateInfo)}");
+	}
 
 	internal ref readonly SDL_GPURenderStateCreateInfo AsNative { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => ref mCreateInfo; }
 
@@ -43,67 +100,19 @@ public sealed partial class GpuRenderStateCreateInfo : IDisposable
 
 		set
 		{
-			if (value is null)
+			unsafe
 			{
-				failValueArgumentNull();
-			}
+				if (value is null)
+				{
+					failValueArgumentNull();
+				}
 
-			field = value;
-			mFragmentShaderValid = false;
+				field = value;
+				mCreateInfo.FragmentShader = value.Pointer;
+			}
 
 			[DoesNotReturn]
 			static void failValueArgumentNull() => throw new ArgumentNullException(nameof(value));
-		}
-	}
-
-	/// <summary>
-	/// Gets or sets the additional fragment samplers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
-	/// </summary>
-	/// <value>
-	/// The additional fragment samplers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
-	/// </value>
-	public IEnumerable<GpuTextureSamplerBinding>? SamplerBindings
-	{
-		get => field;
-
-		set
-		{
-			field = value;
-			mSamplerBindingsValid = false;
-		}
-	}
-
-	/// <summary>
-	/// Gets or sets the storage textures to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
-	/// </summary>
-	/// <value>
-	/// The storage textures to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
-	/// </value>
-	public IEnumerable<GpuTexture>? StorageTextures
-	{
-		get => field;
-
-		set
-		{
-			field = value;
-			mStorageTexturesValid = false;
-		}
-	}
-
-	/// <summary>
-	/// Gets or sets the storage buffers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
-	/// </summary>
-	/// <value>
-	/// The storage buffers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
-	/// </value>
-	public IEnumerable<GpuBuffer>? StorageBuffers
-	{
-		get => field;
-
-		set
-		{
-			field = value;
-			mStorageBuffersValid = false;
 		}
 	}
 
@@ -120,7 +129,7 @@ public sealed partial class GpuRenderStateCreateInfo : IDisposable
 		set
 		{
 			field = value;
-			mPropertiesValid = false;
+			mCreateInfo.Props = value switch { { Id: var id } => id, _ => 0 };
 		}
 	}
 
@@ -134,450 +143,229 @@ public sealed partial class GpuRenderStateCreateInfo : IDisposable
 		GC.SuppressFinalize(this);
 	}
 
-	private void DisposeImpl()
+	private unsafe void DisposeImpl()
 	{
-		mSamplerBindingsManager?.Dispose();
-		mSamplerBindingsManager = null;
-
-		mStorageTexturesManager?.Dispose();
-		mStorageTexturesManager = null;
-
-		mStorageBuffersManager?.Dispose();
-		mStorageBuffersManager = null;
+		NativeMemory.Free(mCreateInfo.SamplerBindings);
+		NativeMemory.Free(mCreateInfo.StorageTextures);
+		NativeMemory.Free(mCreateInfo.StorageBuffers);
 
 		mCreateInfo = default;
 
 		FragmentShader = null!;
-		SamplerBindings = null;
-		StorageTextures = null;
-		StorageBuffers = null;
 		Properties = null;
 
-		mFragmentShaderValid = false;
-		mSamplerBindingsValid = false;
-		mStorageTexturesValid = false;
-		mStorageBuffersValid = false;
-		mPropertiesValid = false;
+		mSamplerBindings = null;
+		mStorageTextures = null;
+		mStorageBuffers = null;
 	}
 
-	/// <summary>
-	/// Tries to prepare this <see cref="GpuRenderStateCreateInfo"/> and caches its internal representation
-	/// </summary>
-	/// <returns><c><see langword="true"/></c>, if this <see cref="GpuRenderStateCreateInfo"/> is ready to be used for creating a <see cref="GpuRenderState"/>; otherwise, <c><see langword="false"/></c></returns>
-	/// <remarks>
-	/// <para>
-	/// This method prepares this <see cref="GpuRenderStateCreateInfo"/>'s internal representation, caching it for future use.
-	/// That means calling this method multiple times without modifying any of the properties is essentially a no-op after the first call.
-	/// </para>
-	/// <para>
-	/// Calling this method is not strictly necessary, as the <see cref="RendererExtensions.TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuRenderStateCreateInfo, out GpuRenderState?)"/> method would prepare the <see cref="GpuRenderStateCreateInfo"/> itself, if necessary.
-	/// But it could be useful to call this method in advance to have a more deterministic point where the preparation happens, and to move away the heavy lifting from the constructor call.
-	/// </para>
-	/// <para>
-	/// This method will return <c><see langword="false"/></c> if any of the required properties is not set to a valid value (e.g. <see cref="FragmentShader"/> is <see langword="null"/>), or if it fails to allocate or reallocate the native memory needed for the sampler bindings, storage textures, or storage buffers.
-	/// </para>
-	/// </remarks>
-	public bool TryPrepare()
-		=> TryPrepareFragmentShader()
-		&& TryPrepareSamplerBindings()
-		&& TryPrepareStorageTextures()
-		&& TryPrepareStorageBuffers()
-		&& TryPrepareProperties();
-
-	private unsafe bool TryPrepareFragmentShader()
+	internal static bool TryCreate(GpuShader fragmentShader, [NotNullWhen(true)] out GpuRenderStateCreateInfo? createInfo, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = default)
 	{
-		if (mFragmentShaderValid)
+		if (fragmentShader is null)
 		{
-			return true;
-		}
-
-		if (FragmentShader is null)
-		{
+			createInfo = null;
 			return false;
 		}
 
-		mCreateInfo.FragmentShader = FragmentShader.Pointer;
+		createInfo = new GpuRenderStateCreateInfo() { FragmentShader = fragmentShader, Properties = properties };
 
-		mFragmentShaderValid = true;
+		if (!(createInfo.TrySetSamplerBindings(samplerBindings)
+			&& createInfo.TrySetStorageTextures(storageTextures)
+			&& createInfo.TrySetStorageBuffers(storageBuffers)))
+		{
+			createInfo.Dispose();
+
+			return false;
+		}
+
 		return true;
 	}
 
-	private unsafe bool TryPrepareSamplerBindings()
+	private GpuTextureSamplerBinding[]? mSamplerBindings = null; // we need this to keep the managed GpuTextures and GpuSamplers instances referenced by the GpuTextureSamplerBinding alive
+
+	/// <summary>
+	/// Tries to set the additional fragment samplers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// </summary>
+	/// <param name="samplerBindings">The additional fragment samplers to bind</param>
+	/// <returns><c><see langword="true"/></c> if the fragment sampler bindings were successfully set; otherwise, <c><see langword="false"/></c></returns>
+	public bool TrySetSamplerBindings(ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings)
 	{
-		const int defaultSamplerBindingsCapacity = 4;
-
-		if (mSamplerBindingsValid)
+		unsafe
 		{
-			return true;
-		}
-
-		var samplerBindings = SamplerBindings;
-
-		if (samplerBindings is null)
-		{
-			mSamplerBindingsManager?.Dispose();
-			mSamplerBindingsManager = null;
-
-			mCreateInfo.NumSamplerBindings = 0;
-			mCreateInfo.SamplerBindings = null;
-
-			mSamplerBindingsValid = true;
-			return true;
-		}
-
-		if (mSamplerBindingsManager is null)
-		{
-			if (!samplerBindings.TryGetNonEnumeratedCount(out var enumerableCount))
-			{
-				enumerableCount = defaultSamplerBindingsCapacity;
-			}
-
-			if (enumerableCount is 0)
+			if (samplerBindings.IsEmpty)
 			{
 				mCreateInfo.NumSamplerBindings = 0;
 				mCreateInfo.SamplerBindings = null;
 
-				mSamplerBindingsValid = true;
+				mSamplerBindings = null;
+
 				return true;
 			}
 
-			if (!NativeMemory.TryMalloc(unchecked((nuint)enumerableCount * (nuint)Unsafe.SizeOf<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>()), out mSamplerBindingsManager))
+			var byteLength = unchecked((nuint)samplerBindings.Length * (nuint)Unsafe.SizeOf<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>());
+
+
+			if (mCreateInfo.SamplerBindings is null)
 			{
-				return false;
-			}
-		}
-		else
-		{
-			// we could avoid having to realloc during the enumeration phase if we can get the count beforehand
+				var sampleBindingsPtr = (GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding*)NativeMemory.Malloc(byteLength);
 
-			if (samplerBindings.TryGetNonEnumeratedCount(out var enumerableCount))
-			{
-				if (enumerableCount is 0)
-				{
-					mSamplerBindingsManager.Dispose();
-					mSamplerBindingsManager = null;
-
-					mCreateInfo.NumSamplerBindings = 0;
-					mCreateInfo.SamplerBindings = null;
-
-					mSamplerBindingsValid = true;
-					return true;
-				}
-
-				var required = unchecked((nuint)enumerableCount * (nuint)Unsafe.SizeOf<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>());
-
-				if (required > mSamplerBindingsManager.Length)
-				{
-					if (!NativeMemory.TryRealloc(ref mSamplerBindingsManager, required))
-					{
-						return false;
-					}
-				}
-			}
-		}
-
-		var samplerBindingsMemory = (NativeMemory<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>)mSamplerBindingsManager.Memory;
-		var samplerBindingPtr = samplerBindingsMemory.RawPointer;
-
-		nuint count = 0;
-		foreach (var samplerBinding in samplerBindings)
-		{
-			var nextCount = count + 1;
-
-			if (nextCount > samplerBindingsMemory.Length)
-			{
-				if (!NativeMemory.TryRealloc(ref mSamplerBindingsManager, unchecked((mSamplerBindingsManager.Length + mSamplerBindingsManager.Length / 2) * (nuint)Unsafe.SizeOf<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>())))
+				if (sampleBindingsPtr is null)
 				{
 					return false;
 				}
 
-				samplerBindingsMemory = (NativeMemory<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>)mSamplerBindingsManager.Memory;
-				samplerBindingPtr = samplerBindingsMemory.RawPointer;
+				mCreateInfo.NumSamplerBindings = samplerBindings.Length;
+				mCreateInfo.SamplerBindings = sampleBindingsPtr;
 			}
-
-			samplerBindingPtr[count] = samplerBinding.ToNative();
-
-			count = nextCount;
-		}
-
-		if (count is 0)
-		{
-			mSamplerBindingsManager.Dispose();
-			mSamplerBindingsManager = null;
-
-			mCreateInfo.NumSamplerBindings = 0;
-			mCreateInfo.SamplerBindings = null;
-
-			mSamplerBindingsValid = true;
-			return true;
-		}
-
-		if (count < samplerBindingsMemory.Length)
-		{
-			NativeMemory.TryRealloc(ref mSamplerBindingsManager, unchecked(count * (nuint)Unsafe.SizeOf<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>()));
-		}
-
-		mCreateInfo.NumSamplerBindings = unchecked((int)count);
-		mCreateInfo.SamplerBindings = (GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding*)mSamplerBindingsManager.RawPointer;
-
-		mSamplerBindingsValid = true;
-		return true;
-	}
-	private unsafe bool TryPrepareStorageTextures()
-	{
-		const int defaultStorageTexturesCapacity = 4;
-
-		if (mStorageTexturesValid)
-		{
-			return true;
-		}
-
-		var storageTextures = StorageTextures;
-
-		if (storageTextures is null)
-		{
-			mStorageTexturesManager?.Dispose();
-			mStorageTexturesManager = null;
-
-			mCreateInfo.NumStorageTextures = 0;
-			mCreateInfo.StorageTextures = null;
-
-			mStorageTexturesValid = true;
-			return true;
-		}
-
-		if (mStorageTexturesManager is null)
-		{
-			if (!storageTextures.TryGetNonEnumeratedCount(out var enumerableCount))
+			else if (mCreateInfo.NumSamplerBindings != samplerBindings.Length) // "!=" also shrinks the allocated memory, if necessary
 			{
-				enumerableCount = defaultStorageTexturesCapacity;
+				var sampleBindingsPtr = (GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding*)NativeMemory.Realloc(mCreateInfo.SamplerBindings, byteLength);
+
+				if (sampleBindingsPtr is null)
+				{
+					return false;
+				}
+
+				mCreateInfo.NumSamplerBindings = samplerBindings.Length;
+				mCreateInfo.SamplerBindings = sampleBindingsPtr;
 			}
 
-			if (enumerableCount is 0)
+			mSamplerBindings = GC.AllocateUninitializedArray<GpuTextureSamplerBinding>(samplerBindings.Length);
+
+			for (var index = 0; index < samplerBindings.Length; index++)
+			{
+				ref readonly var samplerBinding = ref samplerBindings[index];
+
+				mSamplerBindings[index] = samplerBinding;
+				mCreateInfo.SamplerBindings[index] = samplerBinding.ToNative();
+			}
+
+			return true;
+		}
+	}
+
+	private GpuTexture[]? mStorageTextures = null; // we need this to keep the managed GpuTexture instances alive
+
+	/// <summary>
+	/// Tries to set the storage textures to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// </summary>
+	/// <param name="storageTextures">The storage textures to bind</param>
+	/// <returns><c><see langword="true"/></c> if the storage textures were successfully set; otherwise, <c><see langword="false"/></c></returns>
+	public bool TrySetStorageTextures(ReadOnlySpan<GpuTexture> storageTextures)
+	{
+		unsafe
+		{
+			if (storageTextures.IsEmpty)
 			{
 				mCreateInfo.NumStorageTextures = 0;
 				mCreateInfo.StorageTextures = null;
 
-				mStorageTexturesValid = true;
+				mStorageTextures = null;
+
 				return true;
 			}
 
-			if (!NativeMemory.TryMalloc(unchecked((nuint)enumerableCount * (nuint)sizeof(GpuTexture.SDL_GPUTexture*)), out mStorageTexturesManager))
+			var byteLength = unchecked((nuint)storageTextures.Length * (nuint)sizeof(GpuTexture.SDL_GPUTexture*));
+
+			if (mCreateInfo.StorageTextures is null)
 			{
-				return false;
-			}
-		}
-		else
-		{
-			// we could avoid having to realloc during the enumeration phase if we can get the count beforehand
+				var storageTexturesPtr = (GpuTexture.SDL_GPUTexture**)NativeMemory.Malloc(byteLength);
 
-			if (storageTextures.TryGetNonEnumeratedCount(out var enumerableCount))
-			{
-				if (enumerableCount is 0)
-				{
-					mStorageTexturesManager.Dispose();
-					mStorageTexturesManager = null;
-
-					mCreateInfo.NumStorageTextures = 0;
-					mCreateInfo.StorageTextures = null;
-
-					mStorageTexturesValid = true;
-					return true;
-				}
-
-				var required = unchecked((nuint)enumerableCount * (nuint)sizeof(GpuTexture.SDL_GPUTexture*));
-
-				if (required > mStorageTexturesManager.Length)
-				{
-					if (!NativeMemory.TryRealloc(ref mStorageTexturesManager, required))
-					{
-						return false;
-					}
-				}
-			}
-		}
-
-		var storageTexturesMemory = (NativeMemory<IntPtr>)mStorageTexturesManager.Memory;
-		var storageTexturePtr = (GpuTexture.SDL_GPUTexture**)storageTexturesMemory.RawPointer;
-
-		nuint count = 0;
-		foreach (var storageTexture in storageTextures)
-		{
-			var nextCount = count + 1;
-
-			if (nextCount > storageTexturesMemory.Length)
-			{
-				if (!NativeMemory.TryRealloc(ref mStorageTexturesManager, unchecked((mStorageTexturesManager.Length + mStorageTexturesManager.Length / 2) * (nuint)sizeof(GpuTexture.SDL_GPUTexture*))))
+				if (storageTexturesPtr is null)
 				{
 					return false;
 				}
 
-				storageTexturesMemory = (NativeMemory<IntPtr>)mStorageTexturesManager.Memory;
-				storageTexturePtr = (GpuTexture.SDL_GPUTexture**)storageTexturesMemory.RawPointer;
+				mCreateInfo.NumStorageTextures = storageTextures.Length;
+				mCreateInfo.StorageTextures = storageTexturesPtr;
+			}
+			else if (mCreateInfo.NumStorageTextures != storageTextures.Length) // "!=" also shrinks the allocated memory, if necessary
+			{
+				var storageTexturesPtr = (GpuTexture.SDL_GPUTexture**)NativeMemory.Realloc(mCreateInfo.StorageTextures, byteLength);
+
+				if (storageTexturesPtr is null)
+				{
+					return false;
+				}
+
+				mCreateInfo.NumStorageTextures = storageTextures.Length;
+				mCreateInfo.StorageTextures = storageTexturesPtr;
 			}
 
-			storageTexturePtr[count] = storageTexture is not null ? storageTexture.Pointer : null;
+			mStorageTextures = GC.AllocateUninitializedArray<GpuTexture>(storageTextures.Length);
 
-			count = nextCount;
-		}
+			for (var index = 0; index < storageTextures.Length; index++)
+			{
+				ref readonly var storageTexture = ref storageTextures[index];
 
-		if (count is 0)
-		{
-			mStorageTexturesManager.Dispose();
-			mStorageTexturesManager = null;
+				mStorageTextures[index] = storageTexture;
+				mCreateInfo.StorageTextures[index] = storageTexture is not null ? storageTexture.Pointer : null;
+			}
 
-			mCreateInfo.NumStorageTextures = 0;
-			mCreateInfo.StorageTextures = null;
-
-			mStorageTexturesValid = true;
 			return true;
 		}
-
-		if (count < storageTexturesMemory.Length)
-		{
-			NativeMemory.TryRealloc(ref mStorageTexturesManager, unchecked(count * (nuint)sizeof(GpuTexture.SDL_GPUTexture*)));
-		}
-
-		mCreateInfo.NumStorageTextures = unchecked((int)count);
-		mCreateInfo.StorageTextures = (GpuTexture.SDL_GPUTexture**)mStorageTexturesManager.RawPointer;
-
-		mStorageTexturesValid = true;
-		return true;
 	}
 
-	private unsafe bool TryPrepareStorageBuffers()
+	private GpuBuffer[]? mStorageBuffers = null; // we need this to keep the managed GpuBuffer instances alive
+
+	/// <summary>
+	/// Tries to set the storage buffers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// </summary>
+	/// <param name="storageBuffers">The storage buffers to bind</param>
+	/// <returns><c><see langword="true"/></c> if the storage buffers were successfully set; otherwise, <c><see langword="false"/></c></returns>
+	public bool TrySetStorageBuffers(ReadOnlySpan<GpuBuffer> storageBuffers)
 	{
-		const int defaultStorageBuffersCapacity = 4;
-
-		if (mStorageBuffersValid)
+		unsafe
 		{
-			return true;
-		}
-
-		var storageBuffers = StorageBuffers;
-
-		if (storageBuffers is null)
-		{
-			mStorageBuffersManager?.Dispose();
-			mStorageBuffersManager = null;
-
-			mCreateInfo.NumStorageBuffers = 0;
-			mCreateInfo.StorageBuffers = null;
-
-			mStorageBuffersValid = true;
-			return true;
-		}
-
-		if (mStorageBuffersManager is null)
-		{
-			if (!storageBuffers.TryGetNonEnumeratedCount(out var enumerableCount))
-			{
-				enumerableCount = defaultStorageBuffersCapacity;
-			}
-
-			if (enumerableCount is 0)
+			if (storageBuffers.IsEmpty)
 			{
 				mCreateInfo.NumStorageBuffers = 0;
 				mCreateInfo.StorageBuffers = null;
 
-				mStorageBuffersValid = true;
+				mStorageBuffers = null;
+
 				return true;
 			}
 
-			if (!NativeMemory.TryMalloc(unchecked((nuint)enumerableCount * (nuint)sizeof(GpuBuffer.SDL_GPUBuffer*)), out mStorageBuffersManager))
+			var byteLength = unchecked((nuint)storageBuffers.Length * (nuint)sizeof(GpuBuffer.SDL_GPUBuffer*));
+
+			if (mCreateInfo.StorageBuffers is null)
 			{
-				return false;
-			}
-		}
-		else
-		{
-			// we could avoid having to realloc during the enumeration phase if we can get the count beforehand
+				var storageBuffersPtr = (GpuBuffer.SDL_GPUBuffer**)NativeMemory.Malloc(byteLength);
 
-			if (storageBuffers.TryGetNonEnumeratedCount(out var enumerableCount))
-			{
-				if (enumerableCount is 0)
-				{
-					mStorageBuffersManager.Dispose();
-					mStorageBuffersManager = null;
-
-					mCreateInfo.NumStorageBuffers = 0;
-					mCreateInfo.StorageBuffers = null;
-
-					mStorageBuffersValid = true;
-					return true;
-				}
-
-				var required = unchecked((nuint)enumerableCount * (nuint)sizeof(GpuBuffer.SDL_GPUBuffer*));
-
-				if (required > mStorageBuffersManager.Length)
-				{
-					if (!NativeMemory.TryRealloc(ref mStorageBuffersManager, required))
-					{
-						return false;
-					}
-				}
-			}
-		}
-
-		var storageBuffersMemory = (NativeMemory<IntPtr>)mStorageBuffersManager.Memory;
-		var storageBufferPtr = (GpuBuffer.SDL_GPUBuffer**)storageBuffersMemory.RawPointer;
-
-		nuint count = 0;
-		foreach (var storageBuffer in storageBuffers)
-		{
-			var nextCount = count + 1;
-
-			if (nextCount > storageBuffersMemory.Length)
-			{
-				if (!NativeMemory.TryRealloc(ref mStorageBuffersManager, unchecked((mStorageBuffersManager.Length + mStorageBuffersManager.Length / 2) * (nuint)sizeof(GpuBuffer.SDL_GPUBuffer*))))
+				if (storageBuffersPtr is null)
 				{
 					return false;
 				}
 
-				storageBuffersMemory = (NativeMemory<IntPtr>)mStorageBuffersManager.Memory;
-				storageBufferPtr = (GpuBuffer.SDL_GPUBuffer**)storageBuffersMemory.RawPointer;
+				mCreateInfo.NumStorageBuffers = storageBuffers.Length;
+				mCreateInfo.StorageBuffers = storageBuffersPtr;
+			}
+			else if (mCreateInfo.NumStorageBuffers != storageBuffers.Length) // "!=" also shrinks the allocated memory, if necessary
+			{
+				var storageBuffersPtr = (GpuBuffer.SDL_GPUBuffer**)NativeMemory.Realloc(mCreateInfo.StorageBuffers, byteLength);
+
+				if (storageBuffersPtr is null)
+				{
+					return false;
+				}
+
+				mCreateInfo.NumStorageBuffers = storageBuffers.Length;
+				mCreateInfo.StorageBuffers = storageBuffersPtr;
 			}
 
-			storageBufferPtr[count] = storageBuffer is not null ? storageBuffer.Pointer : null;
+			mStorageBuffers = GC.AllocateUninitializedArray<GpuBuffer>(storageBuffers.Length);
 
-			count = nextCount;
-		}
+			for (var index = 0; index < storageBuffers.Length; index++)
+			{
+				ref readonly var storageBuffer = ref storageBuffers[index];
 
-		if (count is 0)
-		{
-			mStorageBuffersManager.Dispose();
-			mStorageBuffersManager = null;
+				mStorageBuffers[index] = storageBuffer;
+				mCreateInfo.StorageBuffers[index] = storageBuffer is not null ? storageBuffer.Pointer : null;
+			}
 
-			mCreateInfo.NumStorageBuffers = 0;
-			mCreateInfo.StorageBuffers = null;
-
-			mStorageBuffersValid = true;
 			return true;
 		}
-
-		if (count < storageBuffersMemory.Length)
-		{
-			NativeMemory.TryRealloc(ref mStorageBuffersManager, unchecked(count * (nuint)sizeof(GpuBuffer.SDL_GPUBuffer*)));
-		}
-
-		mCreateInfo.NumStorageBuffers = unchecked((int)count);
-		mCreateInfo.StorageBuffers = (GpuBuffer.SDL_GPUBuffer**)mStorageBuffersManager.RawPointer;
-
-		mStorageBuffersValid = true;
-		return true;
-	}
-
-	private bool TryPrepareProperties()
-	{
-		if (mPropertiesValid)
-		{
-			return true;
-		}
-
-		mCreateInfo.Props = Properties is { Id: var id } ? id : 0;
-
-		mPropertiesValid = true;
-		return true;
 	}
 }
 

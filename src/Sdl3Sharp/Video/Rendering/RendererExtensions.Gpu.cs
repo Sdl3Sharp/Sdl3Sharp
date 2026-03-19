@@ -119,13 +119,11 @@ partial class RendererExtensions
 		/// <returns><c><see langword="true"/></c>, if the render state was created successfully; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 		/// <remarks>
 		/// <para>
-		/// Use this method if you want to use a shared <see cref="GpuRenderStateCreateInfo"/>.
-		/// Notice that the given <paramref name="createInfo"/> is automatically <see cref="GpuRenderStateCreateInfo.TryPrepare">prepared</see> if it requires preparation, this might impact performance.
-		/// You can call <see cref="GpuRenderStateCreateInfo.TryPrepare"/> manually any time before calling this method to avoid that overhead.
+		/// Use this method if you want to use a shared <see cref="GpuRenderStateCreateInfo"/> for the creation.
 		/// Alternatively, you can use the <see cref="TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuShader, out GpuRenderState?, ReadOnlySpan{GpuTextureSamplerBinding}, ReadOnlySpan{GpuTexture}, ReadOnlySpan{GpuBuffer}, Properties?)"/> method to create a <see cref="GpuRenderState"/> without needing to create a separate <see cref="GpuRenderStateCreateInfo"/> instance.
 		/// </para>
 		/// <para>
-		/// In addition to SDL errors, this method returns <c><see langword="false"/></c> if <paramref name="createInfo"/> is <c><see langword="null"/></c> or can't be prepared successfully.
+		/// In addition to SDL errors, this method returns <c><see langword="false"/></c> if <paramref name="createInfo"/> is <c><see langword="null"/></c>.
 		/// </para>
 		/// <para>
 		/// This method should be called on the thread that created the <see cref="Renderer{TDriver}"/>.
@@ -135,8 +133,7 @@ partial class RendererExtensions
 		{
 			unsafe
 			{
-				if (renderer is null
-					|| createInfo?.TryPrepare() is not true)
+				if (renderer is null || createInfo is null)
 				{
 					gpuRenderState = null;
 					return false;
@@ -154,7 +151,7 @@ partial class RendererExtensions
 					return false;
 				}
 
-				gpuRenderState = new(renderStatePtr);
+				gpuRenderState = new(renderStatePtr, createInfo);
 				return true;
 			}
 		}
@@ -171,8 +168,8 @@ partial class RendererExtensions
 		/// <returns><c><see langword="true"/></c>, if the render state was created successfully; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 		/// <remarks>
 		/// <para>
-		/// Notice that even though this method does not require you to create a separate <see cref="GpuRenderStateCreateInfo"/> instance, it may still impact performance due to the preparation of the given arguments.
-		/// You can use the <see cref="TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuRenderStateCreateInfo, out GpuRenderState?)"/> method with a pre-prepared <see cref="GpuRenderStateCreateInfo"/> instance to avoid that overhead.
+		/// Notice that even though this method does not require you to create a separate <see cref="GpuRenderStateCreateInfo"/> instance yourself, it still creates one internally and that may still impact performance.
+		/// You can use the <see cref="TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuRenderStateCreateInfo, out GpuRenderState?)"/> method with a pre-prepared <see cref="GpuRenderStateCreateInfo"/> instance if you want to reuse the same <see cref="GpuRenderStateCreateInfo"/> at some point.
 		/// </para>
 		/// <para>
 		/// In addition to SDL errors, this method returns <c><see langword="false"/></c> if <paramref name="fragmentShader"/> is <c><see langword="null"/></c>.
@@ -186,88 +183,28 @@ partial class RendererExtensions
 			unsafe
 			{
 				if (renderer is null
-					|| fragmentShader is null)
+					|| !GpuRenderStateCreateInfo.TryCreate(fragmentShader, out var createInfo, samplerBindings, storageTextures, storageBuffers, properties))
 				{
 					gpuRenderState = null;
 					return false;
 				}
 
-				Unsafe.SkipInit(out GpuRenderStateCreateInfo.SDL_GPURenderStateCreateInfo createInfo);
-
-				try
+				GpuRenderState.SDL_GPURenderState* renderStatePtr;
+				fixed (GpuRenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfoPtr = &createInfo.AsNative)
 				{
-					createInfo.FragmentShader = fragmentShader.Pointer;
+					renderStatePtr = GpuRenderState.SDL_CreateGPURenderState(renderer.Pointer, createInfoPtr);
 
-					if (samplerBindings.IsEmpty)
-					{
-						createInfo.NumSamplerBindings = 0;
-						createInfo.SamplerBindings = null;
-					}
-					else
-					{
-						createInfo.NumSamplerBindings = samplerBindings.Length;
-						createInfo.SamplerBindings = unchecked((GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding*)Utilities.NativeMemory.Malloc(unchecked((nuint)createInfo.NumSamplerBindings * (nuint)Unsafe.SizeOf<GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding>())));
-
-						var samplerBindingsPtr = createInfo.SamplerBindings;
-						foreach (var samplerBinding in samplerBindings)
-						{
-							*samplerBindingsPtr++ = samplerBinding.ToNative();
-						}
-					}
-
-					if (storageTextures.IsEmpty)
-					{
-						createInfo.NumStorageTextures = 0;
-						createInfo.StorageTextures = null;
-					}
-					else
-					{
-						createInfo.NumStorageTextures = storageTextures.Length;
-						createInfo.StorageTextures = unchecked((GpuTexture.SDL_GPUTexture**)Utilities.NativeMemory.Malloc(unchecked((nuint)createInfo.NumStorageTextures * (nuint)sizeof(GpuTexture.SDL_GPUTexture*))));
-
-						var storageTexturesPtr = createInfo.StorageTextures;
-						foreach (var storageTexture in storageTextures)
-						{
-							*storageTexturesPtr++ = storageTexture.Pointer;
-						}
-					}
-
-					if (storageBuffers.IsEmpty)
-					{
-						createInfo.NumStorageBuffers = 0;
-						createInfo.StorageBuffers = null;
-					}
-					else
-					{
-						createInfo.NumStorageBuffers = storageBuffers.Length;
-						createInfo.StorageBuffers = unchecked((GpuBuffer.SDL_GPUBuffer**)Utilities.NativeMemory.Malloc(unchecked((nuint)createInfo.NumStorageBuffers * (nuint)sizeof(GpuBuffer.SDL_GPUBuffer*))));
-
-						var storageBuffersPtr = createInfo.StorageBuffers;
-						foreach (var storageBuffer in storageBuffers)
-						{
-							*storageBuffersPtr++ = storageBuffer.Pointer;
-						}
-					}
-
-					createInfo.Props = properties is { Id: var id } ? id : 0;
-
-					var renderStatePtr = GpuRenderState.SDL_CreateGPURenderState(renderer.Pointer, &createInfo);
-
-					if (renderStatePtr is null)
-					{
-						gpuRenderState = null;
-						return false;
-					}
-
-					gpuRenderState = new(renderStatePtr);
-					return true;
+					// It's okay to unpin the createInfo here, because the native side copies its data anyways
 				}
-				finally
+
+				if (renderStatePtr is null)
 				{
-					Utilities.NativeMemory.Free(createInfo.StorageBuffers);
-					Utilities.NativeMemory.Free(createInfo.StorageTextures);
-					Utilities.NativeMemory.Free(createInfo.SamplerBindings);
+					gpuRenderState = null;
+					return false;
 				}
+
+				gpuRenderState = new(renderStatePtr, createInfo);
+				return true;
 			}
 		}
 
