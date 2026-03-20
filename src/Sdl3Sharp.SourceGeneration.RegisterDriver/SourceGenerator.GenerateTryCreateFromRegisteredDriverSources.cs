@@ -156,7 +156,7 @@ partial class SourceGenerator
 	private static readonly DiagnosticDescriptor mMissingRequiredInterfaceImplementation = new(
 		id: $"{DiagnosticDescriptorIdPrefix}005",
 		title: "Missing required interface implementation",
-		messageFormat: "The driver type '{0}' must implement either the interface '{1}' or the interface '{2}'",
+		messageFormat: "The driver type '{0}' must implement either the interface '{1}', the interface '{2}', or the interface '{3}'",
 		category: DiagnosticDescriptorCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true
@@ -165,7 +165,7 @@ partial class SourceGenerator
 	private static readonly DiagnosticDescriptor mConflictingInterfaceImplementationDescriptor = new(
 		id: $"{DiagnosticDescriptorIdPrefix}006",
 		title: "Conflicting interface implementation",
-		messageFormat: "The driver type '{0}' cannot implement both the interface '{1}' and the interface '{2}'",
+		messageFormat: "The driver type '{0}' cannot implement multiple driver interfaces at the same time (only one of the interfaces '{1}', '{2}', and '{3}'')",
 		category: DiagnosticDescriptorCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true
@@ -213,7 +213,17 @@ partial class SourceGenerator
 					 displayTypeName               = "Display",
 					 displayFullTypeName           = $"{windowingNamespaceName}.{displayTypeName}",
 					 displayTDriverTypeName        = "Display`1",
-					 displayTDriverFullTypeName    = $"{windowingNamespaceName}.{displayTDriverTypeName}";
+					 displayTDriverFullTypeName    = $"{windowingNamespaceName}.{displayTDriverTypeName}",
+					 gpuNamespaceName              = "Sdl3Sharp.Video.Gpu",
+					 iGpuDriverNamespaceName       = $"{gpuNamespaceName}.Drivers",
+					 iGpuDriverTypeName            = "IGpuDriver",
+					 iGpuDriverFullTypeName        = $"{iGpuDriverNamespaceName}.{iGpuDriverTypeName}",
+					 gpuDeviceTypeName             = "GpuDevice",
+					 gpuDeviceFullTypeName         = $"{gpuNamespaceName}.{gpuDeviceTypeName}",
+					 sdlGpuDeviceTypeName          = "SDL_GPUDevice",
+					 sdlGpuDeviceFullTypeName      = $"{gpuDeviceFullTypeName}+{sdlGpuDeviceTypeName}",
+					 gpuDeviceTDriverTypeName      = "GpuDevice`1",
+					 gpuDeviceTDriverFullTypeName  = $"{gpuNamespaceName}.{gpuDeviceTDriverTypeName}";
 
 		var (compilation, values) = data;
 
@@ -468,36 +478,116 @@ partial class SourceGenerator
 			return;
 		}
 
+		
+		var iGpuDriverType = compilation.GetTypeByMetadataName(iGpuDriverFullTypeName);
+		if (iGpuDriverType is null)
+		{
+			foreach (var (_, _, location) in values)
+			{
+				spc.ReportDiagnostic(Diagnostic.Create(
+					mMissingRequiredTypeDescriptor,
+					location,
+					iGpuDriverFullTypeName
+				));
+			}
+			return;
+		}
+
+		var gpuDeviceType = compilation.GetTypeByMetadataName(gpuDeviceFullTypeName);
+		if (gpuDeviceType is null)
+		{
+			foreach (var (_, _, location) in values)
+			{
+				spc.ReportDiagnostic(Diagnostic.Create(
+					mMissingRequiredTypeDescriptor,
+					location,
+					gpuDeviceFullTypeName
+				));
+			}
+			return;
+		}
+		
+		var sdlGpuDeviceType = compilation.GetTypeByMetadataName(sdlGpuDeviceFullTypeName);
+		if (sdlGpuDeviceType is null)
+		{
+			foreach (var (_, _, location) in values)
+			{
+				spc.ReportDiagnostic(Diagnostic.Create(
+					mMissingRequiredTypeDescriptor,
+					location,
+					sdlGpuDeviceFullTypeName
+				));
+			}
+			return;
+		}
+
+		var sdlGpuDevicePointerType = compilation.CreatePointerTypeSymbol(sdlGpuDeviceType);
+
+		var gpuDeviceTDriverType = compilation.GetTypeByMetadataName(gpuDeviceTDriverFullTypeName);
+		if (gpuDeviceTDriverType is null)
+		{
+			foreach (var (_, _, location) in values)
+			{
+				spc.ReportDiagnostic(Diagnostic.Create(
+					mMissingRequiredTypeDescriptor,
+					location,
+					gpuDeviceTDriverFullTypeName
+				));
+			}
+			return;
+		}
+
+		if (!gpuDeviceTDriverType.InstanceConstructors.Any(ctor
+			=> ctor is { Parameters: [{ Type: var gpuDeviceType }, { Type.SpecialType: SpecialType.System_Boolean }] }
+			&& SymbolEqualityComparer.Default.Equals(gpuDeviceType, sdlGpuDevicePointerType)
+		))
+		{
+			foreach (var (_, _, location) in values)
+			{
+				spc.ReportDiagnostic(Diagnostic.Create(
+					mMissingRequiredConstructorDescriptor,
+					location,
+					gpuDeviceTDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), $"{sdlGpuDevicePointerType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat)}, {compilation.GetSpecialType(SpecialType.System_Boolean).ToDisplayString(mDiagnosticTypeSymbolDisplayFormat)}"
+				));
+			}
+			return;
+		}
+
 		var renderingDrivers = new BuildTree();
 		var windowingDrivers = new BuildTree();
+		var gpuDrivers = new BuildTree();
 
 		foreach (var (targetType, driverName, location) in values)
 		{
 			var interfaces = targetType.AllInterfaces;
 
-			switch (interfaces.Contains(iRenderingDriverType, SymbolEqualityComparer.Default), interfaces.Contains(iWindowingDriverType, SymbolEqualityComparer.Default))
+			switch (interfaces.Contains(iRenderingDriverType, SymbolEqualityComparer.Default), interfaces.Contains(iWindowingDriverType, SymbolEqualityComparer.Default), interfaces.Contains(iGpuDriverType, SymbolEqualityComparer.Default))
 			{
-				case (false, false):
+				case (false, false, false):
 					spc.ReportDiagnostic(Diagnostic.Create(
 						mMissingRequiredInterfaceImplementation,
 						location,
-						targetType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat),	iRenderingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iWindowingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat)
+						targetType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat),	iRenderingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iWindowingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iGpuDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat)
 					));
 					break;
 
-				case (true, false):
+				case (true, false, false):
 					renderingDrivers.Add(spc, driverName, targetType, location);
 					break;
 
-				case (false, true):
+				case (false, true, false):
 					windowingDrivers.Add(spc, driverName, targetType, location);
 					break;
 
-				case (true, true):
+				case (false, false, true):
+					gpuDrivers.Add(spc, driverName, targetType, location);
+					break;
+
+				default:
 					spc.ReportDiagnostic(Diagnostic.Create(
 						mConflictingInterfaceImplementationDescriptor,
 						location,
-						targetType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iRenderingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iWindowingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat)
+						targetType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iRenderingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iWindowingDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat), iGpuDriverType.ToDisplayString(mDiagnosticTypeSymbolDisplayFormat)
 					));
 					break;
 			}
@@ -736,6 +826,62 @@ partial class SourceGenerator
 			""");
 
 		spc.AddSource($"{displayFullTypeName}_TryCreateFromRegisteredDriver.g.cs", SourceText.From(
+			text: builder.ToString(),
+			encoding: Encoding.UTF8
+		));
+
+		builder.Clear();
+
+		builder.Append($$"""
+			#nullable enable
+			
+			namespace {{gpuNamespaceName}};
+			
+			partial class {{gpuDeviceTypeName}}
+			{
+				[global::System.CodeDom.Compiler.GeneratedCode("{{mTool.Name}}", "{{mTool.Version}}")]
+				internal unsafe static bool TryCreateFromRegisteredDriver({{sdlGpuDeviceTypeName}}* device, bool register, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {{gpuDeviceTypeName}}? result)
+				{
+			""");
+
+		if (!gpuDrivers.IsEmpty)
+		{
+			builder.Append($$"""
+
+						var name = SDL_GetGPUDeviceDriver(device);
+
+						if (name is not null)
+						{
+				""");
+
+			gpuDrivers.Print(builder, "name", (builder, targetType, indentation) =>
+				builder.Append($$"""
+
+					{{indentation}}result = new {{gpuDeviceTDriverType.Construct(targetType).ToDisplayString(mDefaultTypeSymbolDisplayFormat)}}(device, register);
+					{{indentation}}return true;
+
+					"""),
+				indentation: "\t\t\t", indentationStep: "\t"
+			);
+
+			builder.Append($$"""
+
+						}
+
+				""");
+		}
+
+		builder.Append("""
+
+					result = null;
+					return false;
+				}
+			}
+
+			#nullable restore
+			""");
+
+		spc.AddSource($"{gpuDeviceFullTypeName}_TryCreateFromRegisteredDriver.g.cs", SourceText.From(
 			text: builder.ToString(),
 			encoding: Encoding.UTF8
 		));

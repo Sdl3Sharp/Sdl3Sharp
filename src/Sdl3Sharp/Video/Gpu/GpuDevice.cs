@@ -3,9 +3,15 @@ using System.Runtime.CompilerServices;
 
 namespace Sdl3Sharp.Video.Gpu;
 
-public partial class GpuDevice
+public abstract partial class GpuDevice
 {
 	private unsafe SDL_GPUDevice* mDevice;
+
+	// TODO: IMPLEMENT!
+	private protected unsafe GpuDevice(SDL_GPUDevice* device, bool register)
+	{
+		mDevice = device;
+	}
 
 	internal unsafe SDL_GPUDevice* Pointer { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mDevice; }
 
