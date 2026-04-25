@@ -77,7 +77,7 @@ All wrapper scripts forward their arguments directly to `make.cs`.
 
 ## Native library binaries
 
-By default, the build tool downloads pre-built SDL3 native library binaries from the [SDL-native](https://github.com/Sdl3Sharp/SDL-native) releases. This is configured via the `runtimesUrl` property in `make.json`, or equivalently via the `--runtimes-url` CLI option.
+By default, the build tool downloads pre-built SDL3 native library binaries from [SDL3#'s native SDL build repository's](https://github.com/Sdl3Sharp/SDL) releases. This is configured via the `runtimesUrl` property in `make.json`, or equivalently via the `--runtimes-url` CLI option.
 
 If you want to use a custom build of SDL3 instead, pass `--runtimes-url` with a URL pointing to your own archive, or update the `runtimesUrl` property in `make.json` accordingly. Local paths are supported using `file://` URLs.
 
