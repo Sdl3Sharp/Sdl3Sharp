@@ -793,3 +793,6 @@ build/
 
 # For local dotnet tools, especially needed for docfx, because make.cs requires a --local installation
 dotnet-tools.json
+
+# C# Dev Kit cache files
+*.lscache
