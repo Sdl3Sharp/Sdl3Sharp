@@ -1,26 +1,24 @@
 ﻿#if SDL3_4_0_OR_GREATER
 
 using Sdl3Sharp.Utilities;
-#if SDL3_6_0_OR_GREATER
-using Sdl3Sharp.Video.Gpu;
-#endif
+using Sdl3Sharp.Video.Rendering;
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Sdl3Sharp.Video.Rendering;
+namespace Sdl3Sharp.Video.Gpu;
 
 /// <summary>
 /// Represents a custom GPU render state
 /// </summary>
-public sealed partial class GpuRenderState : IDisposable
+public sealed partial class RenderState : IDisposable
 {
 	private unsafe SDL_GPURenderState* mState;
-	private GpuRenderStateCreateInfo? mCreateInfo = null; // used to keep the managed GpuRenderStateCreateInfo alive that was used to create this GpuRenderState, if any
-														  // this is necessary because the managed GpuRenderStateCreateInfo in turn keeps to GpuTextureSamplerBinding instances,
+	private RenderStateCreateInfo? mCreateInfo = null; // used to keep the managed RenderStateCreateInfo alive that was used to create this RenderState, if any
+														  // this is necessary because the managed RenderStateCreateInfo in turn keeps to TextureSamplerBinding instances,
 														  // the GpuTexture instances, and the GpuBuffer instances alive that it contains
 														  // and the native SDL_GPURenderState may reference their underlying native resources at some point
 
-	internal unsafe GpuRenderState(SDL_GPURenderState* state, GpuRenderStateCreateInfo? createInfo)
+	internal unsafe RenderState(SDL_GPURenderState* state, RenderStateCreateInfo? createInfo)
 	{
 		mState = state;
 		mCreateInfo = createInfo;
@@ -29,12 +27,12 @@ public sealed partial class GpuRenderState : IDisposable
 	internal unsafe SDL_GPURenderState* Pointer { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mState; }
 
 	/// <inheritdoc/>
-	~GpuRenderState() => DisposeImpl();
+	~RenderState() => DisposeImpl();
 
 	/// <inheritdoc/>
 	/// <remarks>
 	/// <para>
-	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Drivers.Gpu">Gpu</see>&gt;.
+	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Rendering.Drivers.Gpu">Gpu</see>&gt;.
 	/// </para>
 	/// </remarks>
 	public void Dispose()
@@ -78,7 +76,7 @@ public sealed partial class GpuRenderState : IDisposable
 	/// This given <paramref name="data"/> is copied and will be pushed using <see cref="SDL_PushGPUFragmentUniformData"/> during draw call execution.
 	/// </para>
 	/// <para>
-	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Drivers.Gpu">Gpu</see>&gt;.
+	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Rendering.Drivers.Gpu">Gpu</see>&gt;.
 	/// </para>
 	/// </remarks>
 	public bool TrySetFragmentUniforms(uint slotIndex, NativeMemory data)
@@ -112,7 +110,7 @@ public sealed partial class GpuRenderState : IDisposable
 	/// This given <paramref name="data"/> is copied and will be pushed using <see cref="SDL_PushGPUFragmentUniformData"/> during draw call execution.
 	/// </para>
 	/// <para>
-	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Drivers.Gpu">Gpu</see>&gt;.
+	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Rendering.Drivers.Gpu">Gpu</see>&gt;.
 	/// </para>
 	/// </remarks>
 	public bool TrySetFragmentUniforms(uint slotIndex, ReadOnlySpan<byte> data)
@@ -140,7 +138,7 @@ public sealed partial class GpuRenderState : IDisposable
 	/// This given <paramref name="data"/> is copied and will be pushed using <see cref="SDL_PushGPUFragmentUniformData"/> during draw call execution.
 	/// </para>
 	/// <para>
-	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Drivers.Gpu">Gpu</see>&gt;.
+	/// This method should be called on the thread that created the <see cref="Renderer{TDriver}">Renderer</see>&lt;<see cref="Rendering.Drivers.Gpu">Gpu</see>&gt;.
 	/// </para>
 	/// </remarks>
 	public unsafe bool TrySetFragmentUniforms(uint slotIndex, void* data, uint lenght)
@@ -150,7 +148,7 @@ public sealed partial class GpuRenderState : IDisposable
 
 #if SDL3_6_0_OR_GREATER
 
-	private GpuTextureSamplerBinding[]? mSamplerBindings = null; // used to keep the managed GpuTextureSamplerBinding instances alive that were used to set the sampler bindings of this GpuRenderState, if any
+	private GpuTextureSamplerBinding[]? mSamplerBindings = null; // used to keep the managed GpuTextureSamplerBinding instances alive that were used to set the sampler bindings of this RenderState, if any
 																 // this is necessary because the native SDL_GPURenderState may reference their underlying native resources at some point
 
 	/// <summary>
@@ -236,7 +234,7 @@ public sealed partial class GpuRenderState : IDisposable
 		}
 	}
 
-	private GpuBuffer[]? mStorageBuffers = null; // used to keep the managed GpuBuffer instances alive that were used to set the storage buffers of this GpuRenderState, if any
+	private GpuBuffer[]? mStorageBuffers = null; // used to keep the managed GpuBuffer instances alive that were used to set the storage buffers of this RenderState, if any
 												 // this is necessary because the native SDL_GPURenderState may reference their underlying native resources at some point
 
 	/// <summary>
@@ -322,7 +320,7 @@ public sealed partial class GpuRenderState : IDisposable
 		}
 	}
 
-	private GpuTexture[]? mStorageTextures = null; // used to keep the managed GpuTexture instances alive that were used to set the storage textures of this GpuRenderState, if any
+	private GpuTexture[]? mStorageTextures = null; // used to keep the managed GpuTexture instances alive that were used to set the storage textures of this RenderState, if any
 												   // this is necessary because the native SDL_GPURenderState may reference their underlying native resources at some point
 
 	/// <summary>

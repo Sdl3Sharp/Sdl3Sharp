@@ -3,6 +3,8 @@ using System.Runtime.CompilerServices;
 
 namespace Sdl3Sharp.Video.Gpu;
 
+// TODO: make 'abstract' if we want to introduce GpuTexture<TDriver> inheriting from this,
+//       or make 'sealed' otherwise
 public partial class GpuTexture
 {
 	private unsafe SDL_GPUTexture* mTexture;

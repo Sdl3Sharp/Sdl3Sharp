@@ -1,33 +1,33 @@
 ﻿#if SDL3_4_0_OR_GREATER
 
 using Sdl3Sharp.Utilities;
-using Sdl3Sharp.Video.Gpu;
+using Sdl3Sharp.Video.Rendering;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-namespace Sdl3Sharp.Video.Rendering;
+namespace Sdl3Sharp.Video.Gpu;
 
 /// <summary>
-/// Represents the information needed to create a <see cref="GpuRenderState"/>
+/// Represents the information needed to create a <see cref="RenderState"/>
 /// </summary>
 /// <remarks>
 /// <para>
-/// This type can be used to share the same creation parameters across multiple <see cref="GpuRenderState"/> instances, or if you want to prepare the creation parameters in advance and move the heavy lifting away from the constructor call.
-/// Alternatively, you can use the <see cref="RendererExtensions.TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuShader, out GpuRenderState?, ReadOnlySpan{GpuTextureSamplerBinding}, ReadOnlySpan{GpuTexture}, ReadOnlySpan{GpuBuffer}, Sdl3Sharp.Properties?)"/> method
-/// to create a <see cref="GpuRenderState"/> without needing to create a separate <see cref="GpuRenderStateCreateInfo"/> instance.
+/// This type can be used to share the same creation parameters across multiple <see cref="RenderState"/> instances, or if you want to prepare the creation parameters in advance and move the heavy lifting away from the constructor call.
+/// Alternatively, you can use the <see cref="RendererExtensions.TryCreateRenderState(Renderer{Rendering.Drivers.Gpu}, Shader, out RenderState?, ReadOnlySpan{GpuTextureSamplerBinding}, ReadOnlySpan{GpuTexture}, ReadOnlySpan{GpuBuffer}, Properties?)"/> method
+/// to create a <see cref="RenderState"/> without needing to create a separate <see cref="RenderStateCreateInfo"/> instance.
 /// </para>
 /// </remarks>
-public sealed partial class GpuRenderStateCreateInfo() : IDisposable
+public sealed partial class RenderStateCreateInfo() : IDisposable
 {
-	// GpuRenderStateCreateInfo also doubles as a way to keep the managed GpuTextureSamplerBinding instances, the GpuTexture instances, and the GpuBuffer instances alive
-	// that are referenced by this instances and used when creating a GpuRenderState,
+	// RenderStateCreateInfo also doubles as a way to keep the managed GpuTextureSamplerBinding instances, the GpuTexture instances, and the GpuBuffer instances alive
+	// that are referenced by this instances and used when creating a RenderState,
 	// so that they don't get GC'd while the native SDL_GPURenderState may still reference their underlying native resources.
 
 	private SDL_GPURenderStateCreateInfo mCreateInfo = default;
 
 	/// <summary>
-	/// Creates a new <see cref="GpuRenderStateCreateInfo"/> with the specified fragment shader, additional fragment sampler bindings, storage textures, storage buffers, and optional properties for extensions
+	/// Creates a new <see cref="RenderStateCreateInfo"/> with the specified fragment shader, additional fragment sampler bindings, storage textures, storage buffers, and optional properties for extensions
 	/// </summary>
 	/// <param name="fragmentShader">The fragment shader to use</param>
 	/// <param name="samplerBindings">The additional fragment sampler bindings</param>
@@ -43,7 +43,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 	/// Could not set the storage buffers
 	/// </exception>
 	[SetsRequiredMembers]
-	public GpuRenderStateCreateInfo(GpuShader fragmentShader, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = null)
+	public RenderStateCreateInfo(Shader fragmentShader, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = null)
 		: this()
 	{
 		if (fragmentShader is null)
@@ -74,27 +74,27 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 		static void failFragmentShaderArgumentNull() => throw new ArgumentNullException(nameof(fragmentShader));
 
 		[DoesNotReturn]
-		static void failCouldNotSetSamplerBindings() => throw new InvalidOperationException($"Could not set the fragment sampler bindings for the {nameof(GpuRenderStateCreateInfo)}");
+		static void failCouldNotSetSamplerBindings() => throw new InvalidOperationException($"Could not set the fragment sampler bindings for the {nameof(RenderStateCreateInfo)}");
 
 		[DoesNotReturn]
-		static void failCouldNotSetStorageTextures() => throw new InvalidOperationException($"Could not set the storage textures for the {nameof(GpuRenderStateCreateInfo)}");
+		static void failCouldNotSetStorageTextures() => throw new InvalidOperationException($"Could not set the storage textures for the {nameof(RenderStateCreateInfo)}");
 
 		[DoesNotReturn]
-		static void failCouldNotSetStorageBuffers() => throw new InvalidOperationException($"Could not set the storage buffers for the {nameof(GpuRenderStateCreateInfo)}");
+		static void failCouldNotSetStorageBuffers() => throw new InvalidOperationException($"Could not set the storage buffers for the {nameof(RenderStateCreateInfo)}");
 	}
 
 	internal ref readonly SDL_GPURenderStateCreateInfo AsNative { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => ref mCreateInfo; }
 
 	/// <summary>
-	/// Gets or sets the fragment shader to use when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// Gets or sets the fragment shader to use when the render state created from this <see cref="RenderStateCreateInfo"/> is active
 	/// </summary>
 	/// <value>
-	/// The fragment shader to use when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// The fragment shader to use when the render state created from this <see cref="RenderStateCreateInfo"/> is active
 	/// </value>
 	/// <exception cref="ArgumentNullException">
 	/// When setting this property to <see langword="null"/>
 	/// </exception>
-	public required GpuShader FragmentShader
+	public required Shader FragmentShader
 	{
 		get => field;
 
@@ -134,7 +134,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 	}
 
 	/// <inheritdoc/>
-	~GpuRenderStateCreateInfo() => DisposeImpl();
+	~RenderStateCreateInfo() => DisposeImpl();
 
 	/// <inheritdoc/>
 	public void Dispose()
@@ -159,7 +159,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 		mStorageBuffers = null;
 	}
 
-	internal static bool TryCreate(GpuShader fragmentShader, [NotNullWhen(true)] out GpuRenderStateCreateInfo? createInfo, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = default)
+	internal static bool TryCreate(Shader fragmentShader, [NotNullWhen(true)] out RenderStateCreateInfo? createInfo, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = default)
 	{
 		if (fragmentShader is null)
 		{
@@ -167,7 +167,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 			return false;
 		}
 
-		createInfo = new GpuRenderStateCreateInfo() { FragmentShader = fragmentShader, Properties = properties };
+		createInfo = new RenderStateCreateInfo() { FragmentShader = fragmentShader, Properties = properties };
 
 		if (!(createInfo.TrySetSamplerBindings(samplerBindings)
 			&& createInfo.TrySetStorageTextures(storageTextures)
@@ -184,7 +184,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 	private GpuTextureSamplerBinding[]? mSamplerBindings = null; // we need this to keep the managed GpuTextures and GpuSamplers instances referenced by the GpuTextureSamplerBinding alive
 
 	/// <summary>
-	/// Tries to set the additional fragment samplers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// Tries to set the additional fragment samplers to bind when the render state created from this <see cref="RenderStateCreateInfo"/> is active
 	/// </summary>
 	/// <param name="samplerBindings">The additional fragment samplers to bind</param>
 	/// <returns><c><see langword="true"/></c> if the fragment sampler bindings were successfully set; otherwise, <c><see langword="false"/></c></returns>
@@ -247,7 +247,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 	private GpuTexture[]? mStorageTextures = null; // we need this to keep the managed GpuTexture instances alive
 
 	/// <summary>
-	/// Tries to set the storage textures to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// Tries to set the storage textures to bind when the render state created from this <see cref="RenderStateCreateInfo"/> is active
 	/// </summary>
 	/// <param name="storageTextures">The storage textures to bind</param>
 	/// <returns><c><see langword="true"/></c> if the storage textures were successfully set; otherwise, <c><see langword="false"/></c></returns>
@@ -309,7 +309,7 @@ public sealed partial class GpuRenderStateCreateInfo() : IDisposable
 	private GpuBuffer[]? mStorageBuffers = null; // we need this to keep the managed GpuBuffer instances alive
 
 	/// <summary>
-	/// Tries to set the storage buffers to bind when the render state created from this <see cref="GpuRenderStateCreateInfo"/> is active
+	/// Tries to set the storage buffers to bind when the render state created from this <see cref="RenderStateCreateInfo"/> is active
 	/// </summary>
 	/// <param name="storageBuffers">The storage buffers to bind</param>
 	/// <returns><c><see langword="true"/></c> if the storage buffers were successfully set; otherwise, <c><see langword="false"/></c></returns>

@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace Sdl3Sharp.Video.Gpu;
 
 [method: MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization), SetsRequiredMembers]
-public readonly partial struct GpuTextureSamplerBinding(GpuTexture texture, GpuSampler sampler)
+public readonly partial struct GpuTextureSamplerBinding(GpuTexture texture, Sampler sampler)
 {
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	private static GpuTexture ValidateTexture(GpuTexture texture)
@@ -22,7 +22,7 @@ public readonly partial struct GpuTextureSamplerBinding(GpuTexture texture, GpuS
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static GpuSampler ValidateSampler(GpuSampler sampler)
+	private static Sampler ValidateSampler(Sampler sampler)
 	{
 		if (sampler is null)
 		{
@@ -41,14 +41,14 @@ public readonly partial struct GpuTextureSamplerBinding(GpuTexture texture, GpuS
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] init => field = ValidateTexture(value);
 	} = ValidateTexture(texture);
 
-	public required readonly GpuSampler Sampler
+	public required readonly Sampler Sampler
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => field;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] init => field = ValidateSampler(value);
 	} = ValidateSampler(sampler);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public readonly void Deconstruct(out GpuTexture texture, out GpuSampler sampler) { texture = Texture; sampler = Sampler; }
+	public readonly void Deconstruct(out GpuTexture texture, out Sampler sampler) { texture = Texture; sampler = Sampler; }
 
 	internal unsafe SDL_GPUTextureSamplerBinding ToNative() => new(Texture is not null ? Texture.Pointer : null, Sampler is not null ? Sampler.Pointer : null);
 }

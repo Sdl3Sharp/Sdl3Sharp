@@ -2,7 +2,7 @@
 
 namespace Sdl3Sharp.Video.Gpu;
 
-public partial class GpuBuffer
+public sealed partial class GpuBuffer
 {
 	private unsafe SDL_GPUBuffer* mBuffer;
 

@@ -34,7 +34,7 @@ partial class RendererExtensions
 	/// </remarks>
 	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_SetGPURenderState">SDL_SetGPURenderState</seealso>
 	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
-	internal unsafe static partial CBool SDL_SetGPURenderState(Renderer.SDL_Renderer* renderer, GpuRenderState.SDL_GPURenderState* state);
+	internal unsafe static partial CBool SDL_SetGPURenderState(Renderer.SDL_Renderer* renderer, RenderState.SDL_GPURenderState* state);
 }
 
 #endif

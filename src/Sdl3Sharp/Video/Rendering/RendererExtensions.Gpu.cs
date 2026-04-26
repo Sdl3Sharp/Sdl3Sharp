@@ -112,15 +112,15 @@ partial class RendererExtensions
 		}
 
 		/// <summary>
-		/// Tries to create a new <see cref="GpuRenderState"/>
+		/// Tries to create a new <see cref="RenderState"/>
 		/// </summary>
 		/// <param name="createInfo">Information describing the render state to create</param>
-		/// <param name="gpuRenderState">The newly created <see cref="GpuRenderState"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="null"/></c></param> 
+		/// <param name="renderState">The newly created <see cref="RenderState"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="null"/></c></param> 
 		/// <returns><c><see langword="true"/></c>, if the render state was created successfully; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 		/// <remarks>
 		/// <para>
-		/// Use this method if you want to use a shared <see cref="GpuRenderStateCreateInfo"/> for the creation.
-		/// Alternatively, you can use the <see cref="TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuShader, out GpuRenderState?, ReadOnlySpan{GpuTextureSamplerBinding}, ReadOnlySpan{GpuTexture}, ReadOnlySpan{GpuBuffer}, Properties?)"/> method to create a <see cref="GpuRenderState"/> without needing to create a separate <see cref="GpuRenderStateCreateInfo"/> instance.
+		/// Use this method if you want to use a shared <see cref="RenderStateCreateInfo"/> for the creation.
+		/// Alternatively, you can use the <see cref="TryCreateRenderState(Renderer{Drivers.Gpu}, Shader, out RenderState?, ReadOnlySpan{GpuTextureSamplerBinding}, ReadOnlySpan{GpuTexture}, ReadOnlySpan{GpuBuffer}, Properties?)"/> method to create a <see cref="RenderState"/> without needing to create a separate <see cref="RenderStateCreateInfo"/> instance.
 		/// </para>
 		/// <para>
 		/// In addition to SDL errors, this method returns <c><see langword="false"/></c> if <paramref name="createInfo"/> is <c><see langword="null"/></c>.
@@ -129,38 +129,38 @@ partial class RendererExtensions
 		/// This method should be called on the thread that created the <see cref="Renderer{TDriver}"/>.
 		/// </para>
 		/// </remarks>
-		public bool TryCreateGpuRenderState(GpuRenderStateCreateInfo createInfo, [NotNullWhen(true)] out GpuRenderState? gpuRenderState)
+		public bool TryCreateRenderState(RenderStateCreateInfo createInfo, [NotNullWhen(true)] out RenderState? renderState)
 		{
 			unsafe
 			{
 				if (renderer is null || createInfo is null)
 				{
-					gpuRenderState = null;
+					renderState = null;
 					return false;
 				}
 
-				GpuRenderState.SDL_GPURenderState* renderStatePtr;
-				fixed (GpuRenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfoPtr = &createInfo.AsNative)
+				RenderState.SDL_GPURenderState* renderStatePtr;
+				fixed (RenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfoPtr = &createInfo.AsNative)
 				{
-					renderStatePtr = GpuRenderState.SDL_CreateGPURenderState(renderer.Pointer, createInfoPtr);
+					renderStatePtr = RenderState.SDL_CreateGPURenderState(renderer.Pointer, createInfoPtr);
 				}
 
 				if (renderStatePtr is null)
 				{
-					gpuRenderState = null;
+					renderState = null;
 					return false;
 				}
 
-				gpuRenderState = new(renderStatePtr, createInfo);
+				renderState = new(renderStatePtr, createInfo);
 				return true;
 			}
 		}
 
 		/// <summary>
-		/// Tries to create a new <see cref="GpuRenderState"/>
+		/// Tries to create a new <see cref="RenderState"/>
 		/// </summary>
 		/// <param name="fragmentShader">The fragment shader to use when this render state is active</param>
-		/// <param name="gpuRenderState">The newly created <see cref="GpuRenderState"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="null"/></c></param> 
+		/// <param name="renderState">The newly created <see cref="RenderState"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="null"/></c></param> 
 		/// <param name="samplerBindings">The additional fragment samplers to bind when this render state is active</param>
 		/// <param name="storageTextures">The storage textures to bind when this render state is active</param>
 		/// <param name="storageBuffers">The storage buffers to bind when this render state is active</param>
@@ -168,8 +168,8 @@ partial class RendererExtensions
 		/// <returns><c><see langword="true"/></c>, if the render state was created successfully; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 		/// <remarks>
 		/// <para>
-		/// Notice that even though this method does not require you to create a separate <see cref="GpuRenderStateCreateInfo"/> instance yourself, it still creates one internally and that may still impact performance.
-		/// You can use the <see cref="TryCreateGpuRenderState(Renderer{Drivers.Gpu}, GpuRenderStateCreateInfo, out GpuRenderState?)"/> method with a pre-prepared <see cref="GpuRenderStateCreateInfo"/> instance if you want to reuse the same <see cref="GpuRenderStateCreateInfo"/> at some point.
+		/// Notice that even though this method does not require you to create a separate <see cref="RenderStateCreateInfo"/> instance yourself, it still creates one internally and that may still impact performance.
+		/// You can use the <see cref="TryCreateRenderState(Renderer{Drivers.Gpu}, RenderStateCreateInfo, out RenderState?)"/> method with a pre-prepared <see cref="RenderStateCreateInfo"/> instance if you want to reuse the same <see cref="RenderStateCreateInfo"/> at some point.
 		/// </para>
 		/// <para>
 		/// In addition to SDL errors, this method returns <c><see langword="false"/></c> if <paramref name="fragmentShader"/> is <c><see langword="null"/></c>.
@@ -178,32 +178,32 @@ partial class RendererExtensions
 		/// This method should be called on the thread that created the <see cref="Renderer{TDriver}"/>.
 		/// </para>
 		/// </remarks>
-		public bool TryCreateGpuRenderState(GpuShader fragmentShader, [NotNullWhen(true)] out GpuRenderState? gpuRenderState, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = default)
+		public bool TryCreateRenderState(Shader fragmentShader, [NotNullWhen(true)] out RenderState? renderState, ReadOnlySpan<GpuTextureSamplerBinding> samplerBindings = default, ReadOnlySpan<GpuTexture> storageTextures = default, ReadOnlySpan<GpuBuffer> storageBuffers = default, Properties? properties = default)
 		{
 			unsafe
 			{
 				if (renderer is null
-					|| !GpuRenderStateCreateInfo.TryCreate(fragmentShader, out var createInfo, samplerBindings, storageTextures, storageBuffers, properties))
+					|| !RenderStateCreateInfo.TryCreate(fragmentShader, out var createInfo, samplerBindings, storageTextures, storageBuffers, properties))
 				{
-					gpuRenderState = null;
+					renderState = null;
 					return false;
 				}
 
-				GpuRenderState.SDL_GPURenderState* renderStatePtr;
-				fixed (GpuRenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfoPtr = &createInfo.AsNative)
+				RenderState.SDL_GPURenderState* renderStatePtr;
+				fixed (RenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfoPtr = &createInfo.AsNative)
 				{
-					renderStatePtr = GpuRenderState.SDL_CreateGPURenderState(renderer.Pointer, createInfoPtr);
+					renderStatePtr = RenderState.SDL_CreateGPURenderState(renderer.Pointer, createInfoPtr);
 
 					// It's okay to unpin the createInfo here, because the native side copies its data anyways
 				}
 
 				if (renderStatePtr is null)
 				{
-					gpuRenderState = null;
+					renderState = null;
 					return false;
 				}
 
-				gpuRenderState = new(renderStatePtr, createInfo);
+				renderState = new(renderStatePtr, createInfo);
 				return true;
 			}
 		}
@@ -376,29 +376,29 @@ partial class RendererExtensions
 		/// <summary>
 		/// Tries to set a custom GPU render state as the current render state of the renderer
 		/// </summary>
-		/// <param name="gpuRenderState">The <see cref="GpuRenderState"/> to set as the current render state of the renderer, or <c><see langword="null"/></c> to clear and reset the current render state</param>
+		/// <param name="renderState">The <see cref="RenderState"/> to set as the current render state of the renderer, or <c><see langword="null"/></c> to clear and reset the current render state</param>
 		/// <returns><c><see langword="true"/></c>, if the render state was set successfully; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 		/// <remarks>
 		/// <para>
 		/// This method sets custom GPU render state for subsequent draw calls. This allows for using custom shaders with the GPU renderer.
 		/// </para>
 		/// <para>
-		/// If the given <paramref name="gpuRenderState"/> is <c><see langword="null"/></c>, the current render state will be cleared and reset.
+		/// If the given <paramref name="renderState"/> is <c><see langword="null"/></c>, the current render state will be cleared and reset.
 		/// </para>
 		/// <para>
 		/// This method should only be called on the thread that created the renderer.
 		/// </para>
 		/// </remarks>
-		public bool TrySetGpuRenderState(GpuRenderState? gpuRenderState)
+		public bool TrySetGpuRenderState(RenderState? renderState)
 		{
 			unsafe
 			{
-				GpuRenderState.SDL_GPURenderState* state;
-				if (gpuRenderState is null)
+				RenderState.SDL_GPURenderState* state;
+				if (renderState is null)
 				{
 					state = null;
 				}
-				else if (gpuRenderState.Pointer is var pointer && pointer is not null)
+				else if (renderState.Pointer is var pointer && pointer is not null)
 				{
 					state = pointer;
 				}

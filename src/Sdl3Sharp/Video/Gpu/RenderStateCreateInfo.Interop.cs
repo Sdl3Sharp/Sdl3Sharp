@@ -1,14 +1,12 @@
 ﻿#if SDL3_4_0_OR_GREATER
 
-using Sdl3Sharp.Video.Gpu;
+namespace Sdl3Sharp.Video.Gpu;
 
-namespace Sdl3Sharp.Video.Rendering;
-
-partial class GpuRenderStateCreateInfo
+partial class RenderStateCreateInfo
 {
 	internal unsafe struct SDL_GPURenderStateCreateInfo
 	{
-		public GpuShader.SDL_GPUShader* FragmentShader;
+		public Shader.SDL_GPUShader* FragmentShader;
 
 		public int NumSamplerBindings;
 		public GpuTextureSamplerBinding.SDL_GPUTextureSamplerBinding* SamplerBindings;

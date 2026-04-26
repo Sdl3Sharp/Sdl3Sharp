@@ -2,15 +2,13 @@
 
 using Sdl3Sharp.Internal.Interop;
 using Sdl3Sharp.SourceGeneration;
-#if SDL3_6_0_OR_GREATER
-using Sdl3Sharp.Video.Gpu;
-#endif
+using Sdl3Sharp.Video.Rendering;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Sdl3Sharp.Video.Rendering;
+namespace Sdl3Sharp.Video.Gpu;
 
-partial class GpuRenderState
+partial class RenderState
 {
 	// opaque struct
 	[StructLayout(LayoutKind.Sequential, Size = 0)]
@@ -29,7 +27,7 @@ partial class GpuRenderState
 	/// </remarks>
 	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_CreateGPURenderState">SDL_CreateGPURenderState</seealso>
 	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
-	internal unsafe static partial SDL_GPURenderState* SDL_CreateGPURenderState(Renderer.SDL_Renderer* renderer, GpuRenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfo);
+	internal unsafe static partial SDL_GPURenderState* SDL_CreateGPURenderState(Renderer.SDL_Renderer* renderer, RenderStateCreateInfo.SDL_GPURenderStateCreateInfo* createInfo);
 
 	/// <summary>
 	/// Destroy custom GPU render state
