@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="../tests/Sdl3Sharp.Test.Unit/Sdl3Sharp.Test.Unit.csproj" Id="8c06630e-0a98-4096-a2f0-12244abf8c53" />
+  <Project Path="../tests/Sdl3Sharp.Tests.Integration/Sdl3Sharp.Tests.Integration.csproj" Id="b9b0b627-81fd-4791-8ab8-2a09c3290d7b" />
   <Project Path="Sdl3Sharp.SourceGeneration.RegisterDriver/Sdl3Sharp.SourceGeneration.RegisterDriver.csproj" />
   <Project Path="Sdl3Sharp.SourceGeneration/Sdl3Sharp.SourceGeneration.csproj" />
   <Project Path="Sdl3Sharp/Sdl3Sharp.csproj" />
