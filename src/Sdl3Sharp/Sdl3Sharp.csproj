@@ -22,6 +22,11 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Sdl3Sharp.Image" />
   </ItemGroup>
+
+  <!-- Maybe guard this with a condition to only be included in test builds? -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sdl3Sharp.Tests" />
+  </ItemGroup>
   
   <ItemGroup>
     <ProjectReference Include="..\Sdl3Sharp.SourceGeneration\Sdl3Sharp.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
