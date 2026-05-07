@@ -9,7 +9,7 @@
     <IsTestProject>true</IsTestProject> <!-- "IsTestProject" is technically not needed, since this project already references Microsoft.NET.Test.Sdk, but it doesn't hurt to be explicit -->
 
     <LibffiTestPackageVersion Condition="'$(LibffiTestPackageVersion)' == ''">3.5.2-r.0</LibffiTestPackageVersion>
-    <UseSdlTestPackage Condition="'$(UseSdlTestPackage)' == ''">true</UseSdlTestPackage>
+    <UseNativeTestPackage Condition="'$(UseNativeTestPackage)' == ''">true</UseNativeTestPackage>
     <SdlTestPackageVersion Condition="'$(SdlTestPackageVersion)' == ''">3.4.8-r.0</SdlTestPackageVersion>
   </PropertyGroup>
 
@@ -26,7 +26,7 @@
     <PackageReference Include="Sdl3Sharp.Libffi.Test" Version="$(LibffiTestPackageVersion)" />
   </ItemGroup>
   
-  <ItemGroup Condition="'$(UseSdlTestPackage)' == 'true'">
+  <ItemGroup Condition="'$(UseNativeTestPackage)' == 'true'">
     <PackageReference Include="Sdl3Sharp.SDL.Test" Version="$(SdlTestPackageVersion)" />
   </ItemGroup>
 
@@ -40,7 +40,7 @@
 
   <Target Name="ValidateNativeTestPackages" BeforeTargets="CollectPackageReferences">
     <Error Condition="'$(LibffiTestPackageVersion)' == ''" Text="The 'LibffiTestPackageVersion' property must be set." />
-    <Error Condition="'$(UseSdlTestPackage)' == 'true' and '$(SdlTestPackageVersion)' == ''" Text="The 'SdlTestPackageVersion' property must be set when 'UseSdlTestPackage' is true." />
+    <Error Condition="'$(UseNativeTestPackage)' == 'true' and '$(SdlTestPackageVersion)' == ''" Text="The 'SdlTestPackageVersion' property must be set when 'UseNativeTestPackage' is true." />
   </Target>
 
 </Project>
