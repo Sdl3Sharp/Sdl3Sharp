@@ -4,3 +4,6 @@
 [submodule "assets"]
 	path = assets
 	url = https://github.com/Sdl3Sharp/Sdl3Sharp-assets.git
+[submodule "make.cs"]
+	path = make.cs
+	url = https://github.com/Sdl3Sharp/make.cs.git
