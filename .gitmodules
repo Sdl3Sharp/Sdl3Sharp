@@ -1,9 +1,6 @@
 [submodule "src/Sdl3Sharp.SourceGeneration"]
 	path = src/Sdl3Sharp.SourceGeneration
 	url = https://github.com/Sdl3Sharp/Sdl3Sharp.SourceGeneration.git
-[submodule "make.cs"]
-	path = make.cs
-	url = https://github.com/Sdl3Sharp/make.cs.git
 [submodule "assets"]
 	path = assets
 	url = https://github.com/Sdl3Sharp/Sdl3Sharp-assets.git
