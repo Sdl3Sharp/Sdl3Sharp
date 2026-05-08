@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -27,7 +29,6 @@ jobs:
         run: dotnet restore
 
       - name: Run tests
-        id: test
         working-directory: src
         run: dotnet test --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory ../TestResults
 
