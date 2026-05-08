@@ -29,6 +29,7 @@ jobs:
         run: dotnet restore
 
       - name: Run tests
+        id: tests
         working-directory: src
         run: dotnet test --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory ../TestResults
 
@@ -43,13 +44,25 @@ jobs:
         if: always()
         run: |
           echo "## Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ steps.tests.outcome }}" = "success" ]; then
+            echo "- Status: ✅ Passed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.tests.outcome }}" = "failure" ]; then
+            echo "- Status: ❌ Failed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Status: ⚠️ ${{ steps.tests.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "- Artifact: \`test-results\`" >> "$GITHUB_STEP_SUMMARY"
 
           if ls TestResults/*.trx >/dev/null 2>&1; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "TRX test result files were generated and uploaded as an artifact." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "### Files" >> "$GITHUB_STEP_SUMMARY"
-            find TestResults -maxdepth 1 -name '*.trx' -printf -- '- `%f`\n' >> "$GITHUB_STEP_SUMMARY"
+            echo "### TRX Files" >> "$GITHUB_STEP_SUMMARY"
+
+            for file in TestResults/*.trx; do
+              echo "- \`$(basename "$file")\`" >> "$GITHUB_STEP_SUMMARY"
+            done
           else
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "No TRX test result files were found." >> "$GITHUB_STEP_SUMMARY"
