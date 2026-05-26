@@ -2,7 +2,7 @@
   "project":                    "./src/Sdl3Sharp",
   "logoFile":                   "./assets/icon.txt",
 
-  "runtimesVersion":            "3.4.2",
+  "runtimesVersion":            "3.4.8",
   "runtimesUrl":                "https://github.com/Sdl3Sharp/SDL/releases/download/v{0}/runtimes.zip",
   "runtimesLicenseFileUrl":     "https://github.com/Sdl3Sharp/SDL/releases/download/v{0}/LICENSE.txt",
   "runtimesLicenseSpdxFileUrl": "https://github.com/Sdl3Sharp/SDL/releases/download/v{0}/LICENSE.spdx",

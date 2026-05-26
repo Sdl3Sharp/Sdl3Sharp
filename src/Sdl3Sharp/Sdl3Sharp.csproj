@@ -20,7 +20,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Sdl3Sharp.Image" />
+    <InternalsVisibleTo Include="Sdl3Sharp.Image" />  
+    <InternalsVisibleTo Include="Sdl3Sharp.Ttf" />
   </ItemGroup>
 
   <!-- Maybe guard this with a condition to only be included in test builds? -->

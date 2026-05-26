@@ -4,7 +4,7 @@
 
         <PackageId>Sdl3Sharp</PackageId>
         <VersionPrefix>0.0.1</VersionPrefix>
-        <VersionSuffix>test9</VersionSuffix>
+        <VersionSuffix>test10</VersionSuffix>
         <Description>SDL3# - SDL bindings for C#/.NET</Description>
         <Authors>Felix Rüdiger</Authors>
 
