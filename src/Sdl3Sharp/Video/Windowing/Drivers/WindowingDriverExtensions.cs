@@ -33,7 +33,7 @@ public static class WindowingDriverExtensions
 				{
 					fixed (byte* name = TDriver.NameAscii)
 					{
-						return NativeStringHelper.Equals(name, IWindowingDriver.SDL_GetCurrentVideoDriver());
+						return NativeStrings.Equals(name, IWindowingDriver.SDL_GetCurrentVideoDriver());
 					}
 				}
 			}
