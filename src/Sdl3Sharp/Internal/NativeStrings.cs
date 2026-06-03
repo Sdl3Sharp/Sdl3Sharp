@@ -2,7 +2,7 @@
 
 namespace Sdl3Sharp.Internal;
 
-internal static class NativeStringHelper
+internal static partial class NativeStrings
 {
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	internal unsafe static bool Equals(byte* str1, byte* str2)
