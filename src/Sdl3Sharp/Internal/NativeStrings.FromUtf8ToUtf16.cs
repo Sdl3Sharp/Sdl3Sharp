@@ -90,4 +90,25 @@ partial class NativeStrings
 			ReturnConverterBuffer(buffer, capacity, zeroMemoryUponReturn);
 		}
 	}
+
+	// Note that this overload can't return null
+	internal static string FromUtf8ToUtf16(ReadOnlySpan<byte> value, bool zeroMemoryUponReturn = false)
+	{
+		unsafe
+		{
+			if (value.Length is 0)
+			{
+				// Early return an empty string for empty input, because an input with length of 0 would trigger FromUtf8ToUtf16 to look for a null terminator
+				// which most certainly wouldn't be present in a span representation of the UTF-8 string.
+				return string.Empty;
+			}
+
+			fixed (byte* valuePtr = value)
+			{
+				// FromUtf8ToUtf16 only returns null if the input pointer is null, but because we're pinning the address of the first element of the span,
+				// that surely can't be the case here since the span must exist and has at least one element.
+				return FromUtf8ToUtf16(valuePtr, unchecked((nuint)value.Length), zeroMemoryUponReturn)!;
+			}
+		}
+	}
 }
