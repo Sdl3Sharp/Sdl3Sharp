@@ -5,7 +5,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Sdl3Sharp/Sdl3Sharp?logo=github&label=GitHub%20Release)](https://github.com/Sdl3Sharp/Sdl3Sharp/releases/latest)
 [![NuGet Version](https://img.shields.io/nuget/v/Sdl3Sharp?logo=nuget&label=NuGet%20Package)](https://www.nuget.org/packages/Sdl3Sharp/latest)
 [![SDL Native Library](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSdl3Sharp%2FSdl3Sharp%2Frefs%2Fheads%2Fmain%2Fmake.json&query=%24.runtimesVersion&prefix=v&logo=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1%2BjfqAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm%2B48GgAAAB50RVh0VGl0bGUAU2ltcGxlIERpcmVjdE1lZGlhIExheWVy7JOkpQAAANdJREFUKM%2B1kTFLQmEARc8nBr0%2BkMzBGkQQFAuittDf0NAvaHVqEaJd8Cc0tYhNES0F1d5S0OAa4SZBY6FbnNfwKMihzXvXy%2BFyb5D%2FlWPhgTzQoEPCPU3W%2BOSSD7r0CASmGeGWlGuqdIhEnmhzQsKMdZqAeOXUG1uOPRRHnptaEvFYcsAR%2B3xxBkCBDd5%2BC9Qzwrt3vth37KsTB26bOvLZPS8EMXHLslixahSXrFlz16E7PwHmHDzw1E2RIOQpsUxghUiRVQoUeeAxqxH%2BfBGZzQ8VFn%2FWN3OLaWMFnvBEAAAAAElFTkSuQmCC&label=SDL%20Native%20Library)
-](https://github.com/Sdl3Sharp/SDL-native)
+](https://github.com/Sdl3Sharp/SDL)
 
 ## About
 
