@@ -9,7 +9,7 @@ namespace Sdl3Sharp.Internal;
 
 partial class NativeStrings
 {
-	internal static TransientUtf8String FromUtf16ToUtf8(ReadOnlySpan<char> value, out nuint length, bool nullTerminate = true, bool zeroMemoryUponDispose = false)
+	internal static TransientString<byte> FromUtf16ToUtf8(ReadOnlySpan<char> value, bool nullTerminate = true, bool zeroMemoryUponDispose = false)
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 		static nuint getMaxUtf8ByteCountforUtf16CharCount(int charCount)
@@ -103,10 +103,10 @@ partial class NativeStrings
 					*remainingBuffer = (byte)'\0'; // add the null terminator					
 				}
 
-				length = unchecked((nuint)(remainingBuffer - buffer));
+				var length = unchecked((nuint)(remainingBuffer - buffer));
 
 #pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-				return new(buffer, capacity, zeroMemoryUponDispose);
+				return new(buffer, capacity, length, zeroMemoryUponDispose);
 #pragma warning restore CS0618 
 			}
 			catch
@@ -121,19 +121,18 @@ partial class NativeStrings
 		}
 	}
 
-	internal static TransientUtf8String FromUtf16ToUtf8(string? value, out nuint length, bool nullTerminate = true, bool zeroMemoryUponDispose = false)
+	internal static TransientString<byte> FromUtf16ToUtf8(string? value, bool nullTerminate = true, bool zeroMemoryUponDispose = false)
 	{
 		unsafe
 		{ 
 			if (value is null)
 			{
-				length = 0;
 #pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-				return new(null, 0, false); // it's safe to return a null pointer
+				return new(buffer: null, capacity: 0, length: 0, zeroMemoryUponDispose: false); // it's safe to return a null pointer
 #pragma warning restore CS0618
 			}
 
-			return FromUtf16ToUtf8(value.AsSpan(), out length, nullTerminate, zeroMemoryUponDispose);
+			return FromUtf16ToUtf8(value.AsSpan(), nullTerminate, zeroMemoryUponDispose);
 		}
 	}	
 }
