@@ -14,11 +14,8 @@ partial class NativeStrings
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 		static nuint getMaxUtf8ByteCountforUtf16CharCount(int charCount)
 		{
-			// We don't do anything fancy here, like he BCL's UTF8Encoding.GetMaxByteCount does.
-			// For the sake of simplicity and performance, we just assume the worst case.
-
-			const nuint maxUtf8BytesPerUtf16CodeUnit = 4; // worst case: 4 bytes per UTF-16 code unit
-
+			/* This is only ever used on Span<char>.Length, which is guaranteed to be non-negative, so we don't actually need to check for negative values
+			 * 
 			if (charCount is < 0)
 			{
 				[DoesNotReturn]
@@ -26,10 +23,11 @@ partial class NativeStrings
 
 				failCharCountArgumentOutOfRange();
 			}
+			*/
 
 			var charCountN = unchecked((nuint)charCount);
 
-			if (charCountN >= (nuint.MaxValue / maxUtf8BytesPerUtf16CodeUnit) - 2) // the -2 offest is a safety margin and includes a potential null terminator
+			if (charCountN >= (nuint.MaxValue / (3 * sizeof(byte))) - sizeof(byte)) // the -sizeof(byte) offset is a safety margin and includes a potential null terminator
 			{
 				[DoesNotReturn]
 				static void failCharCountTooLarge() => throw new ArgumentOutOfRangeException(nameof(charCount), "Character count is too large to convert to UTF-8.");
@@ -37,7 +35,7 @@ partial class NativeStrings
 				failCharCountTooLarge();
 			}
 
-			return unchecked(charCountN * maxUtf8BytesPerUtf16CodeUnit);
+			return unchecked(charCountN * (3 * sizeof(byte)));
 		}
 
 		// This is so that we can avoid unnecessary bounds checks that the JIT compiler couldn't elide, but we for sure can give guarantees about
@@ -55,7 +53,9 @@ partial class NativeStrings
 				maxByteCount += 1; // +1 for null terminator
 			}
 
-			var buffer = unchecked((byte*)AcquireConverterBuffer(maxByteCount, out var capacity));
+			var converterBuffer = ConverterBuffer.Acquire(maxByteCount, zeroMemoryUponDispose);
+			var buffer = unchecked((byte*)converterBuffer.Buffer);
+			var capacity = converterBuffer.Capacity;
 
 			// In case anything exceptional happens, we append a catch-rethrow handler to gracefully free or return the buffer, so that we don't end up with dangling memory allocations
 			try
@@ -103,18 +103,13 @@ partial class NativeStrings
 					*remainingBuffer = (byte)'\0'; // add the null terminator					
 				}
 
-				var length = unchecked((nuint)(remainingBuffer - buffer));
-
-#pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-				return new(buffer, capacity, length, zeroMemoryUponDispose);
-#pragma warning restore CS0618 
+				return TransientString.Create<TransientString<byte>>(converterBuffer, length: unchecked((nuint)(remainingBuffer - buffer)));
 			}
 			catch
 			{
 				// If we're here, we might have already allocated a new buffer.
 				// We should gracefully free it or give it back as the shared buffer to avoid dangling memory allocations.
-
-				ReturnConverterBuffer(buffer, capacity, zeroMemoryUponDispose);
+				converterBuffer.Dispose();
 
 				throw;
 			}
@@ -127,9 +122,7 @@ partial class NativeStrings
 		{ 
 			if (value is null)
 			{
-#pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-				return new(buffer: null, capacity: 0, length: 0, zeroMemoryUponDispose: false); // it's safe to return a null pointer
-#pragma warning restore CS0618
+				return TransientString.Create<TransientString<byte>>(buffer: null, length: 0); // it's safe to return a null pointer
 			}
 
 			return FromUtf16ToUtf8(value.AsSpan(), nullTerminate, zeroMemoryUponDispose);

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sdl3Sharp.Utilities;
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -7,83 +8,144 @@ namespace Sdl3Sharp.Internal;
 
 partial class NativeStrings
 {
-	private const nuint SmallSharedConverterBufferSize = 1024; // 1 KB should be good enough for most strings (which are short); also this should be a small enough value to not allocate multiple pages for most platforms	
-
-	private static IntPtr mConverterBuffer;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private unsafe static void* AcquireConverterBuffer(nuint requiredCapacity, out nuint actualCapacity)
+	private sealed class ConverterBuffer : IDisposable
 	{
-		[DoesNotReturn]
-		static void failCouldNotAllocateBuffer() => throw new OutOfMemoryException("Could not allocate buffer for UTF-8 conversion.");
+		private const nuint SmallBufferSize = 1024; // 1 KB should be good enough for most strings (which are short); also this should be a small enough value to not allocate multiple pages for most platforms	
 
-		void* buffer;
-		if (requiredCapacity is <= SmallSharedConverterBufferSize)
+		[Flags]
+		private enum State : uint
 		{
-			// Acquire a potentially exisisting shared buffer
-			buffer = unchecked((void*)Interlocked.Exchange(ref mConverterBuffer, unchecked((IntPtr)(void*)null)));
+			None         = 0,
+			Alive        = 1u << 0, // whether the buffer is "alive" and needs to be returned (i.e., whether it was not disposed yet)
+			NeedsZeroing = 1u << 1, // whether the buffer needs to be zeroed upon return
+		}
 
-			// If there was no buffer available (e.g., it's currently borrowed or there wasn't one created yet), we just create a new one.
-			// And we create a new one with a size of 'SmallSharedConverterBufferSize', so that we can potentially give it back later and make it the shared buffer for future conversions.
+		private static ConverterBuffer? mShared;
 
-			if (buffer is null)
+		private unsafe readonly void* mBuffer;
+		private readonly nuint mCapacity;
+		private volatile State mState;
+
+		private unsafe ConverterBuffer(void* buffer, nuint capacity, bool needsZeroing)
+		{
+			mBuffer = buffer;
+			mCapacity = capacity;
+			mState = State.Alive | (needsZeroing ? State.NeedsZeroing : State.None);
+		}
+
+		~ConverterBuffer() => Dispose(disposing: false);
+
+		public unsafe void* Buffer
+		{
+			get
 			{
-				buffer = Utilities.NativeMemory.Malloc(SmallSharedConverterBufferSize);
+				ValidateIsAlive();
+				return mBuffer;
+			}
+		}
+
+		public nuint Capacity
+		{
+			get
+			{
+				ValidateIsAlive();
+				return mCapacity;
+			}
+		}
+
+		public static ConverterBuffer Acquire(nuint requiredCapacity, bool needsZeroing)
+		{
+			unsafe
+			{
+				if (requiredCapacity is <= SmallBufferSize)
+				{
+					// Acquire a potentially exisisting shared buffer
+					var existing = Interlocked.Exchange(ref mShared, null);
+
+					if (existing is not null)
+					{
+						// If there was an exisisting buffer that we borrowed now, we reuse it by adjusting its state and returning it.
+						existing.mState = State.Alive | (needsZeroing ? State.NeedsZeroing : State.None);
+
+						return existing;
+					}
+
+					// There was no shared buffer available at this point.
+					// We set the required capacity to 'SmallBufferSize' in order to create a new buffer which we can potentially give back later and make it the shared buffer.
+					requiredCapacity = SmallBufferSize;
+				}
+
+				// For larger buffers and in the case where there was no shared buffer available, we always allocate a new buffer.
+				var buffer = NativeMemory.Malloc(requiredCapacity);
 
 				if (buffer is null)
 				{
+					[DoesNotReturn]
+					static void failCouldNotAllocateBuffer() => throw new OutOfMemoryException("Could not allocate buffer for Unicode conversion.");
+
 					failCouldNotAllocateBuffer();
 				}
+
+				return new(buffer, requiredCapacity, needsZeroing);
 			}
-
-			actualCapacity = SmallSharedConverterBufferSize;
-		}
-		else
-		{
-			// We always allocate large buffers anew (we don't share them).
-			buffer = Utilities.NativeMemory.Malloc(requiredCapacity);
-
-			if (buffer is null)
-			{
-				failCouldNotAllocateBuffer();
-			}
-
-			actualCapacity = requiredCapacity;
 		}
 
-		return buffer;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private unsafe static void ReturnConverterBuffer(void* buffer, nuint capacity, bool zeroMemoryUponReturn)
-	{
-		unsafe
+		public void Dispose()
 		{
-			if (buffer is null)
-			{
-				return;
-			}
+			GC.SuppressFinalize(this);
+			Dispose(disposing: true);
+		}
 
-			if (zeroMemoryUponReturn)
+		// This acts as our "return buffer" method
+		private void Dispose(bool disposing)
+		{
+			unsafe
 			{
-				Utilities.NativeMemory.MemSet(buffer, 0, capacity); // zero out the memory before returning or freeing it, as requested
-			}
-
-			if (capacity is SmallSharedConverterBufferSize)
-			{
-				// We only return the buffer, if it was the borrowed one.
-				// And we only give back the borrowed buffer, if there wasn't another one created in the meantime.
-				// We always just keep the most recently returned buffer as the shared buffer (this is just for the sake of simplicity, it might be bad for the principle of locality though).
-				if (unchecked((void*)Interlocked.CompareExchange(ref mConverterBuffer, unchecked((IntPtr)buffer), unchecked((IntPtr)(void*)null))) is not null)
+#pragma warning disable CS0420 // A reference to 'mState' is used with 'Interlocked.And' here. It's totally fine to cast away the volatile modifier, since we are using an interlocked operation here anyway.
+				if ((unchecked((State)Interlocked.And(ref Unsafe.As<State, uint>(ref mState), unchecked((uint)~State.Alive))) & State.Alive) is 0) // unset the 'Alive' flag, since the buffer is either already disposed or is going to be disposed now,
+																																				   // and at the same time check whether the buffer actually needs disposal up until this point
+#pragma warning restore CS0420
 				{
-					// We didn't return the buffer (because there was already another one in place), so we should free the buffer instead.
-					Utilities.NativeMemory.Free(buffer);
+					// 'Alive' flag was already unset, so we don't do anything
+					return;
 				}
+
+
+				if ((mState & State.NeedsZeroing) is not 0) // check whether we need to zero the memory upon return
+				{
+					NativeMemory.MemSet(mBuffer, 0, mCapacity); // zero out the memory before returning or freeing it, as requested
+
+					mState &= ~State.NeedsZeroing; // technically not needed, since we'll overwrite this upon reacquisition anyway, but it's good practice to do so
+				}
+
+				if (mCapacity is SmallBufferSize && disposing)
+				{
+					// We only return the buffer if it was the borrowed one and only if we're not on the finalizer path.
+					// And we only give back the borrowed buffer, if there wasn't another one created in the meantime.
+					// We always just keep the most recently returned buffer as the shared buffer (this is just for the sake of simplicity, it might be bad for the principle of locality though).
+					if (Interlocked.CompareExchange(ref mShared, this, null) is null)
+					{
+						// We successfully returned the buffer, so we don't free it,
+						// instead we reregister it for potential finalization.
+						GC.ReRegisterForFinalize(this);
+
+						return;
+					}
+				}
+
+				// We always free larger buffers or non-shared buffers, or if we are on the finalizer path.
+				NativeMemory.Free(mBuffer);
 			}
-			else
+		}
+
+		private void ValidateIsAlive()
+		{
+			if ((mState & State.Alive) is 0) // check whether the buffer is alive (i.e., not disposed yet)
 			{
-				// We always free large buffers, since we don't share them.
-				Utilities.NativeMemory.Free(buffer);
+				[DoesNotReturn]
+				static void failBufferAlreadyDisposed() => throw new ObjectDisposedException(nameof(ConverterBuffer), "The buffer has already been disposed and cannot be used anymore.");
+
+				failBufferAlreadyDisposed();
 			}
 		}
 	}

@@ -9,13 +9,26 @@ namespace Sdl3Sharp.Internal;
 
 partial class NativeStrings
 {
-	internal unsafe static TransientString<char> FromUtf8ToUtf16(byte* value, nuint length = 0, bool nullTerminate = false, bool zeroMemoryUponReturn = false)
+	internal unsafe static TransientString<char> FromUtf8ToUtf16(byte* value, nuint length = 0, bool nullTerminate = false, bool zeroMemoryUponDispose = false)
 	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		static nuint getMaxUtf16ByteCountforUtf8ByteCount(nuint byteCount)
+		{
+			if (byteCount >= int.MaxValue - 1 // As you can see below, the worst case scenario is that for every byte of the UTF-8 input, we need 1 UTF-16 char. Since we know that we only want to output UTF-16 strings with a length of int.MaxValue or less, we guard against that here. The -1 offset is a safety margin and includes a potential null terminator.
+				|| byteCount >= (nuint.MaxValue / sizeof(char)) - sizeof(char)) // the -sizeof(char) offset is a safety margin and includes a potential null terminator
+			{
+				[DoesNotReturn]
+				static void failByteCountTooLarge() => throw new ArgumentOutOfRangeException(nameof(length), "Byte count is too large to convert to UTF-16.");
+
+				failByteCountTooLarge();
+			}
+
+			return unchecked(byteCount * sizeof(char));
+		}
+
 		if (value is null)
 		{
-#pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-			return new(buffer: null, capacity: 0, length: 0, zeroMemoryUponDispose: false); // it's safe to return a null pointer
-#pragma warning restore CS0618
+			return TransientString.Create<TransientString<char>>(buffer: null, length: 0); // it's safe to return a null pointer
 		}
 
 		if (length is not > 0)
@@ -29,25 +42,16 @@ partial class NativeStrings
 			length = unchecked((nuint)MemoryMarshal.CreateReadOnlySpanFromNullTerminated(value).Length);
 		}
 
-		var charCount = length; // worst case: 1 UTF-16 code unit per UTF-8 byte, so the char count is at most the byte count
-
-		if (charCount >= int.MaxValue - 1
-			|| charCount >= (nuint.MaxValue / (nuint)sizeof(char)) - 2) // the -2 offset is a safety margin
-		{
-			[DoesNotReturn]
-			static void failLengthTooLarge() => throw new ArgumentOutOfRangeException(nameof(length), "Length is too large to convert to UTF-16.");
-
-			failLengthTooLarge();
-		}
-
-		var maxByteCount = charCount * unchecked((nuint)sizeof(char));
+		var maxByteCount = getMaxUtf16ByteCountforUtf8ByteCount(length);
 
 		if (nullTerminate)
 		{
 			maxByteCount += sizeof(char); // we need to account for the null terminator if we want to add it, which is 1 char (2 bytes) in UTF-16
 		}
 
-		var buffer = (char*)AcquireConverterBuffer(maxByteCount, out var capacity);
+		var converterBuffer = ConverterBuffer.Acquire(maxByteCount, zeroMemoryUponDispose);
+		var buffer = unchecked((char*)converterBuffer.Buffer);
+		var capacity = converterBuffer.Capacity;
 
 		try
 		{
@@ -103,18 +107,13 @@ partial class NativeStrings
 				*remainingBuffer = '\0'; // add the null terminator
 			}
 
-			var resultLength = unchecked((nuint)(remainingBuffer - buffer));
-
-#pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-			return new(buffer, capacity, resultLength, zeroMemoryUponReturn);
-#pragma warning restore CS0618
+			return TransientString.Create<TransientString<char>>(converterBuffer, length: unchecked((nuint)(remainingBuffer - buffer)));
 		}
 		catch
 		{
 			// If we're here, we might have already allocated a new buffer.
 			// We should gracefully free it or give it back as the shared buffer to avoid dangling memory allocations.
-
-			ReturnConverterBuffer(buffer, capacity, zeroMemoryUponReturn);
+			converterBuffer.Dispose();
 
 			throw;
 		}
@@ -129,14 +128,12 @@ partial class NativeStrings
 				// Early return an empty string for empty input, because an input with length of 0 would trigger FromUtf8ToUtf16 to look for a null terminator
 				// which most certainly wouldn't be present in a span representation of the UTF-8 string.
 
-#pragma warning disable CS0618 // This is one of the few places where the constructor is allowed to be used - it's actually made for this
-				return new(buffer: null, capacity: 0, length: 0, zeroMemoryUponDispose: false);
-#pragma warning restore CS0618
+				return TransientString.Create<TransientString<char>>(buffer: null, length: 0); // it's safe to return a null pointer
 			}
 
 			fixed (byte* valuePtr = value)
 			{
-				return FromUtf8ToUtf16(valuePtr, unchecked((nuint)value.Length), zeroMemoryUponReturn);
+				return FromUtf8ToUtf16(valuePtr, unchecked((nuint)value.Length), nullTerminate, zeroMemoryUponReturn);
 			}
 		}
 	}

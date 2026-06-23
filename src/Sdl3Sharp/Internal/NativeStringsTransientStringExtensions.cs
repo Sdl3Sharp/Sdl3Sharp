@@ -21,7 +21,7 @@ internal static class NativeStringsTransientStringExtensions
 					return string.Empty;
 				}
 
-				return new string(utf16.Buffer, 0, unchecked((int)nuint.Max(utf16.Length, int.MaxValue)));
+				return new string(utf16.Buffer, 0, unchecked((int)nuint.Min(utf16.Length, int.MaxValue)));
 			}
 		}
 	}
