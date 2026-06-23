@@ -5,6 +5,7 @@
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject> <!-- "IsTestProject" is technically not needed, since this project already references Microsoft.NET.Test.Sdk, but it doesn't hurt to be explicit -->
 
