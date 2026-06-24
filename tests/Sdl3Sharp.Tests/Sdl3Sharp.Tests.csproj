@@ -9,13 +9,13 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject> <!-- "IsTestProject" is technically not needed, since this project already references Microsoft.NET.Test.Sdk, but it doesn't hurt to be explicit -->
 
-    <LibffiTestPackageVersion Condition="'$(LibffiTestPackageVersion)' == ''">3.5.2-r.0</LibffiTestPackageVersion>
+    <LibffiTestPackageVersion Condition="'$(LibffiTestPackageVersion)' == ''">3.6.0-r.0</LibffiTestPackageVersion>
     <UseNativeTestPackage Condition="'$(UseNativeTestPackage)' == ''">true</UseNativeTestPackage>
-    <SdlTestPackageVersion Condition="'$(SdlTestPackageVersion)' == ''">3.4.8-r.0</SdlTestPackageVersion>
+    <SdlTestPackageVersion Condition="'$(SdlTestPackageVersion)' == ''">3.4.10-r.0</SdlTestPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
