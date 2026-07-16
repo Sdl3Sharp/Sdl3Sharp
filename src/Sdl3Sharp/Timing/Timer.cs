@@ -12,19 +12,14 @@ namespace Sdl3Sharp.Timing;
 public sealed partial class Timer :
 	IDisposable, Sdl.IDisposeReceiver, IEquatable<Timer>, IFormattable, ISpanFormattable
 {
-	private WeakReference<Sdl>? mSdlReference;
 	private GCHandle mWrapperHandle;
 	private uint mId;
 
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	public Timer(Sdl sdl, uint millisecondsInterval, TimerMillisecondsCallback callback)
+	public Timer(uint millisecondsInterval, TimerMillisecondsCallback callback)
 	{
-		if (sdl is null)
-		{
-			failSdlArgumentNull();
-		}
 
 		if (millisecondsInterval is 0)
 		{
@@ -49,12 +44,7 @@ public sealed partial class Timer :
 					failCouldNotAddTimer();
 				}
 
-				if (!sdl.TryRegisterDisposable(this))
-				{
-					failCouldNotRegisterWithSdl();
-				}
-
-				mSdlReference = new(sdl);
+				Sdl.TryRegisterDisposable(this);
 			}
 			catch
 			{
@@ -66,9 +56,6 @@ public sealed partial class Timer :
 		}
 
 		[DoesNotReturn]
-		static void failSdlArgumentNull() => throw new ArgumentNullException(nameof(sdl));
-
-		[DoesNotReturn]
 		static void failMillisecondsIntervalArgumentIsZero() => throw new ArgumentException($"The {nameof(millisecondsInterval)} argument must be greater than zero", nameof(millisecondsInterval));
 
 		[DoesNotReturn]
@@ -76,18 +63,10 @@ public sealed partial class Timer :
 
 		[DoesNotReturn]
 		static void failCouldNotAddTimer() => throw new SdlException("Could not add the timer");
-
-		[DoesNotReturn]
-		static void failCouldNotRegisterWithSdl() => throw new InvalidOperationException($"Couldn't register the {nameof(Timer)} with the {nameof(Sdl)} instance");
 	}
 
-	public Timer(Sdl sdl, ulong nanosecondsInterval, TimerNanosecondsCallback callback)
+	public Timer(ulong nanosecondsInterval, TimerNanosecondsCallback callback)
 	{
-		if (sdl is null)
-		{
-			failSdlArgumentNull();
-		}
-
 		if (nanosecondsInterval is 0)
 		{
 			failNanosecondsIntervalArgumentIsZero();
@@ -111,12 +90,7 @@ public sealed partial class Timer :
 					failCouldNotAddTimer();
 				}
 
-				if (!sdl.TryRegisterDisposable(this))
-				{
-					failCouldNotRegisterWithSdl();
-				}
-
-				mSdlReference = new(sdl);
+				Sdl.TryRegisterDisposable(this);
 			}
 			catch
 			{
@@ -128,9 +102,6 @@ public sealed partial class Timer :
 		}
 
 		[DoesNotReturn]
-		static void failSdlArgumentNull() => throw new ArgumentNullException(nameof(sdl));
-
-		[DoesNotReturn]
 		static void failNanosecondsIntervalArgumentIsZero() => throw new ArgumentException($"The {nameof(nanosecondsInterval)} argument must be greater than zero", nameof(nanosecondsInterval));
 
 		[DoesNotReturn]
@@ -138,12 +109,9 @@ public sealed partial class Timer :
 
 		[DoesNotReturn]
 		static void failCouldNotAddTimer() => throw new SdlException("Could not add the timer");
-
-		[DoesNotReturn]
-		static void failCouldNotRegisterWithSdl() => throw new InvalidOperationException($"Couldn't register the {nameof(Timer)} with the {nameof(Sdl)} instance");
 	}
 
-	~Timer() => Dispose(deregister: true);
+	~Timer() => Dispose(deregisterFromSdl: true);
 
 	public static ulong MillisecondTicks => SDL_GetTicks();
 
@@ -158,7 +126,7 @@ public sealed partial class Timer :
 	public void Dispose()
 	{
 		GC.SuppressFinalize(this);
-		Dispose(deregister: true);
+		Dispose(deregisterFromSdl: true);
 	}
 
 	void Sdl.IDisposeReceiver.DisposeFromSdl(Sdl sdl)
@@ -168,10 +136,10 @@ public sealed partial class Timer :
 		GC.SuppressFinalize(this);
 #pragma warning restore CA1816
 #pragma warning restore IDE0079
-		Dispose(deregister: false);
+		Dispose(deregisterFromSdl: false);
 	}
 
-	private void Dispose(bool deregister)
+	private void Dispose(bool deregisterFromSdl)
 	{
 		if (mWrapperHandle is { IsAllocated: true, Target: CallbackWrapper wrapper })
 		{
@@ -189,17 +157,12 @@ public sealed partial class Timer :
 
 		if (mId is not 0)
 		{
-			if (mSdlReference is not null)
+			if (deregisterFromSdl)
 			{
-				if (deregister && mSdlReference.TryGetTarget(out var sdl))
-				{
-					sdl.TryDeregisterDisposable(this);
-				}
-
-				mSdlReference = null;
-
-				SDL_RemoveTimer(mId);
+				Sdl.TryDeregisterDisposable(this);
 			}
+
+			SDL_RemoveTimer(mId);
 
 			mId = 0;
 		}
