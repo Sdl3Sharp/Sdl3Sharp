@@ -20,22 +20,6 @@ public sealed partial class Properties :
 {
 	private static readonly ConcurrentDictionary<uint, WeakReference<Properties>> mKnownInstances = [];
 
-	/// <exception cref="ArgumentNullException"><c><paramref name="sdl"/></c> is <c><see langword="null"/></c></exception>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	[return: NotNull]
-	private static Sdl ValidateSdl([MaybeNull] Sdl sdl)
-	{
-		if (sdl is null)
-		{
-			failSdlArgumentNull();
-		}
-
-		return sdl;
-
-		[DoesNotReturn]
-		static void failSdlArgumentNull() => throw new ArgumentNullException(nameof(sdl));
-	}
-
 	/// <exception cref="SdlException">Couldn't create a new property group (check <see cref="Error.TryGet(out string?)"/> for more information)</exception>
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	private static uint ValidateId(uint id)
@@ -51,46 +35,26 @@ public sealed partial class Properties :
 		static void failIdArgumentIsZero() => throw new SdlException($"SDL returned an invalid {nameof(Properties)} with an {nameof(Id)} of 0");
 	}
 
-	private WeakReference<Sdl>? mSdlReference;
 	private uint mId;
 
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private string DebuggerDisplay => ToString(CultureInfo.InvariantCulture);
 
-	/// <exception cref="InvalidOperationException">Could not register the <see cref="Properties"/> with the given <paramref name="sdl"/> instance</exception>
-	private Properties(Sdl? sdl, uint id)
+	private Properties(uint id, bool registerWithSdl)
 	{
-		if (sdl is not null)
+		if (registerWithSdl)
 		{
-			if (!sdl.TryRegisterDisposable(this))
-			{
-				SDL_DestroyProperties(id);
-
-				failCouldNotRegisterWithSdl();
-			}
-
-			mSdlReference = new(sdl);
+			Sdl.TryRegisterDisposable(this); // TryRegisterDisposable literally cannot fail here (as we're a totally new instance), except for when we're out of memory, in which case we don't care because we're f'd anyway
 		}
 
 		mId = id;
-
-		[DoesNotReturn]
-		static void failCouldNotRegisterWithSdl() => throw new InvalidOperationException($"Couldn't register the {nameof(Properties)} with the given {nameof(Sdl)} instance");
 	}
 
 	/// <summary>
 	/// Creates a new group of properties
 	/// </summary>
-	/// <param name="sdl">The current <see cref="Sdl"/> instance</param>
-	/// <remarks>
-	/// In contrast to most of the remaining API which uses the <c>Try</c>-method pattern, this constructor intentionally fails by throwing an exception.
-	/// If you want to handle failures wrap the call to this constructor in a <c><see langword="try"/></c>-block,
-	/// and check <see cref="Error.TryGet(out string?)"/> for more information when <c><see langword="catch"/></c>ing a <see cref="SdlException"/>.
-	/// </remarks>
-	/// <inheritdoc cref="ValidateSdl(Sdl)"/>
 	/// <inheritdoc cref="ValidateId(uint)"/>
-	/// <inheritdoc cref="Properties(Sdl?, uint)"/>
-	public Properties(Sdl sdl) : this(ValidateSdl(sdl), ValidateId(SDL_CreateProperties()))
+	public Properties() : this(ValidateId(SDL_CreateProperties()), registerWithSdl: true)
 	{
 		mKnownInstances.AddOrUpdate(mId, addRef, updateRef, this);
 
@@ -105,7 +69,7 @@ public sealed partial class Properties :
 				GC.SuppressFinalize(previousProperties);
 	#pragma warning restore CA1816
 	#pragma warning restore IDE0079
-				previousProperties.Dispose(deregister: true, forget: false);
+				previousProperties.Dispose(forget: false, deregisterFromSdl: true);
 			}
 
 			previousPropertiesRef.SetTarget(newProperties);
@@ -114,20 +78,22 @@ public sealed partial class Properties :
 		}
 	}
 
-	/// <summary>
-	/// For internal use only: Creates a temporary <see cref="Properties"/> instance without registering it
-	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// This does not register the created <see cref="Properties"/> instance with any <see cref="Sdl"/> instance.
-	/// Therefore, you must ensure to properly dispose the created instance yourself!
-	/// </para>
-	/// </remarks>
-	internal Properties() : this(sdl: null, ValidateId(SDL_CreateProperties()))
-	{ }
-
 	/// <inheritdoc/>
-	~Properties() => Dispose(deregister: true, forget: true);	
+	~Properties() => Dispose(forget: true, deregisterFromSdl: true);
+
+	/// <summary>
+	/// Gets the global <see cref="Properties">group</see> of SDL properties
+	/// </summary>
+	/// <value>
+	/// The global <see cref="Properties">group</see> of SDL properties, if those could get successfully retrieved; otherwise, <c><see langword="null"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)
+	/// </value>
+	public static Properties? GlobalProperties => SDL_GetGlobalProperties() switch
+	{
+		0 => null,
+		var id => GetOrCreate(id,
+			registerWithSdl: false // we shouldn't register the global properties as an Sdl.IDisposeReceiver, as they could outlive SDL
+		)
+	};
 
 	/// <summary>
 	/// Gets the id of the group of properties
@@ -138,20 +104,20 @@ public sealed partial class Properties :
 	/// <remarks>An id value of <c>0</c> indicates an invalid group of properties</remarks>
 	public uint Id { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId; }
 
-	internal static Properties GetOrCreate(Sdl? sdl, uint id)
+	internal static Properties GetOrCreate(uint id, bool registerWithSdl = true)
 	{
-		var propertiesRef = mKnownInstances.GetOrAdd(id, createRef, sdl);
+		var propertiesRef = mKnownInstances.GetOrAdd(id, createRef, registerWithSdl);
 
 		if (!propertiesRef.TryGetTarget(out var result))
 		{
-			propertiesRef.SetTarget(result = create(id, sdl));
+			propertiesRef.SetTarget(result = create(id, registerWithSdl));
 		}
 
 		return result;
 
-		static WeakReference<Properties> createRef(uint id, Sdl? sdl) => new(create(id, sdl));
+		static WeakReference<Properties> createRef(uint id, bool registerWithSdl) => new(create(id, registerWithSdl));
 
-		static Properties create(uint id, Sdl? sdl) => new(sdl, id);
+		static Properties create(uint id, bool registerWithSdl) => new(id, registerWithSdl);
 	}
 
 	/// <summary>
@@ -186,12 +152,12 @@ public sealed partial class Properties :
 	/// </summary>
 	/// <remarks>
 	/// When a group of properties is destroyed, all properties are deleted and their cleanup callbacks will be called, if any.
-	/// Alternatively, all properties are automatically destroyed when <see cref="Sdl.Dispose"/> is called.
+	/// Alternatively, all properties are automatically destroyed when <see cref="Sdl.Dispose()"/> is called.
 	/// </remarks>
 	public void Dispose()
 	{
 		GC.SuppressFinalize(this);
-		Dispose(deregister: true, forget: true);
+		Dispose(forget: true, deregisterFromSdl: true);
 	}
 
 	void Sdl.IDisposeReceiver.DisposeFromSdl(Sdl sdl)
@@ -201,24 +167,19 @@ public sealed partial class Properties :
 		GC.SuppressFinalize(this);
 #pragma warning restore CA1816
 #pragma warning restore IDE0079
-		Dispose(deregister: false, forget: true);
+		Dispose(forget: true, deregisterFromSdl: false);
 	}
 
-	private void Dispose(bool deregister, bool forget)
+	private void Dispose(bool forget, bool deregisterFromSdl)
 	{
 		if (mId is not 0)
 		{
-			if (mSdlReference is not null)
+			if (deregisterFromSdl)
 			{
-				if (deregister && mSdlReference.TryGetTarget(out var sdl))
-				{
-					sdl.TryDeregisterDisposable(this);
-				}
-
-				mSdlReference = null;
-
-				SDL_DestroyProperties(mId);
+				Sdl.TryDeregisterDisposable(this);
 			}
+
+			SDL_DestroyProperties(mId);
 
 			if (forget)
 			{

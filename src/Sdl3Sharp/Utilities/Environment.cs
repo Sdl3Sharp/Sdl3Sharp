@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.Marshalling;
 
 namespace Sdl3Sharp.Utilities;
@@ -16,110 +18,157 @@ namespace Sdl3Sharp.Utilities;
 /// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
-public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<string, string>>, IEquatable<Environment>
+public sealed partial class Environment : IDisposable, Sdl.IDisposeReceiver, IEnumerable<KeyValuePair<string, string>>, IEquatable<Environment>
 {
-	private SdlDisposeReceiver? mSdlDisposeReceiver;
-	private unsafe SDL_Environment* mEnvironmentPtr;
+	private interface IUnsafeConstructorDispatch;
+
+	private static readonly ConcurrentDictionary<IntPtr, WeakReference<Environment>> mKnownInstance = [];
+
+	/// <exception cref="SdlException">Couldn't create a new <see cref="Environment"/></exception>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	private unsafe static SDL_Environment* ValidateEnvironment(SDL_Environment* environment)
+	{
+		if (environment is null)
+		{
+			static void failCouldNotCreateEnvironment() => throw new SdlException($"Could not create a new {nameof(Environment)}");
+
+			failCouldNotCreateEnvironment();
+		}
+
+		return environment;
+	}
+
+	private unsafe SDL_Environment* mEnvironment;
 
 	//TODO: fix this
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-	private unsafe string DebuggerDisplay => mEnvironmentPtr is not null
+	private unsafe string DebuggerDisplay => mEnvironment is not null
 		? string.Join(" ", this.Select(p => $"{p.Key}={p.Value}"))
 		: "<Invalid>";
 
-	//private Environment(Implementation implementation) => mImplementation = implementation;
+	private unsafe Environment(SDL_Environment* environment, bool registerWithSdl)
+	{
+		if (registerWithSdl)
+		{
+			Sdl.TryDeregisterDisposable(this); // TryRegisterDisposable cannot fail here, because we're registering a new instance
+		}
+
+		mEnvironment = environment;
+	}
+
+	/// <inheritdoc cref="ValidateEnvironment(SDL_Environment*)"/>
+	private unsafe Environment(bool populateFromRuntime, IUnsafeConstructorDispatch? _) :
+		this(ValidateEnvironment(SDL_CreateEnvironment(populateFromRuntime)), registerWithSdl: true)
+	{
+		mKnownInstance.AddOrUpdate(unchecked((IntPtr)mEnvironment), addRef, updateRef, this);
+
+		static WeakReference<Environment> addRef(IntPtr environment, Environment newEnvironment) => new(newEnvironment);
+
+		static WeakReference<Environment> updateRef(IntPtr environment, WeakReference<Environment> existingEnvironmentRef, Environment newEnvironment)
+		{
+			if (existingEnvironmentRef.TryGetTarget(out var exisitingEnvironment))
+			{
+#pragma warning disable IDE0079
+#pragma warning disable CA1816
+				GC.SuppressFinalize(exisitingEnvironment);
+#pragma warning restore CA1816
+#pragma warning restore IDE0079
+				exisitingEnvironment.Dispose(forget: false, deregisterFromSdl: true);
+			}
+
+			existingEnvironmentRef.SetTarget(newEnvironment);
+
+			return existingEnvironmentRef;
+		}
+	}
 
 	/// <summary>
 	/// Creates a new <see cref="Environment">set of environment variables</see>
 	/// </summary>
-	/// <param name="populateFromRuntime">Indicates whether the newly created <see cref="Environment"/> should be initialized with the environment variables from the C runtime environment</param>
+	/// <param name="populateFromRuntime">A value indicating whether the newly created <see cref="Environment"/> should be initialized with the environment variables from the C runtime environment</param>
 	/// <remarks>
 	/// <para>
 	/// If <paramref name="populateFromRuntime"/> is set to <c><see langword="false"/></c> (its default value), it is safe to call this constructor from any thread,
 	/// otherwise it is only safe to call, if there are no other threads that are calling <see cref="TrySetProcessVariableUnsafe(string, string, bool)"/> or <see cref="TryUnsetProcessVariableUnsafe(string)"/>.
 	/// </para>
+	/// </remarks>
+	/// <inheritdoc cref="Environment(bool, IUnsafeConstructorDispatch?)"/>
+	public Environment(bool populateFromRuntime = false) :
+#pragma warning disable IDE0034 // for the sake of explicitness
+		this(populateFromRuntime, default(IUnsafeConstructorDispatch?))
+#pragma warning restore IDE0034 
+	{ }
+
+	/// <summary>
+	/// Gets the <see cref="Environment">set of environment variables</see> for the current process
+	/// </summary>
+	/// <value>
+	/// The <see cref="Environment">set of environment variables</see> for the current process, if those could get successfully retrieved; otherwise, <c><see langword="null"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)
+	/// </value>
+	/// <remarks>
 	/// <para>
-	/// In contrast to most of the remaining API which uses the <c>Try</c>-method pattern, this constructor intentionally fails by throwing an exception.
-	/// If you want to handle failures wrap the call to this constructor in a <c><see langword="try"/></c>-block,
-	/// and check <see cref="Error.TryGet(out string?)"/> for more information when <c><see langword="catch"/></c>ing a <see cref="SdlException"/>.
+	/// This <see cref="Environment">set of environment variables</see> is initialized at application start and is not affected by external calls to modify process environments (e.g. <c>setenv()</c> or <c>unsetenv()</c>) after that point.
+	/// </para>
+	/// <para>
+	/// To modify this <see cref="Environment">set of environment variables</see> use <see cref="TrySetVariable(string, string, bool)"/> or <see cref="TryUnsetVariable(string)"/>.
+	/// Changes made in this way will not persist outside of SDL, and especially not after <see cref="Sdl.Dispose()">SDL is shut down</see>.
+	/// </para>
+	/// <para>
+	/// If you want for changes to persist in the C runtime environment after <see cref="Sdl.Dispose()">SDL is shut down</see>, use <see cref="TrySetProcessVariableUnsafe(string, string, bool)"/> or <see cref="TryUnsetProcessVariableUnsafe(string)"/>.
 	/// </para>
 	/// </remarks>
-	/// <exception cref="SdlException">Couldn't create a new <see cref="Environment"/></exception>
-	public Environment(bool populateFromRuntime = false)
+	public static Environment? ProcessEnvironment
 	{
-		unsafe
+		get
 		{
-			if (!(SDL_CreateEnvironment(populateFromRuntime) is var environmentPtr && environmentPtr is not null))
+			unsafe
 			{
-				failCouldNotCreateEnvironment();
+				TryGetOrCreate(SDL_GetEnvironment(), out var result,
+					registerWithSdl: false // we shouldn't register the process environment as an Sdl.IDisposeReceiver, while it's true that changes to the process environment will not persist after SDL is shut down, the process environment instance can still outlive SDL
+				);
+
+				return result;
 			}
-
-			mSdlDisposeReceiver = null;
-			mEnvironmentPtr = environmentPtr;
-
-			static void failCouldNotCreateEnvironment() => throw new SdlException($"Could not create a new {nameof(Environment)}");
 		}
-	}
-
-	/// <exception cref="InvalidOperationException">Could not register the <see cref="Environment"/> with the given <paramref name="sdl"/> instance</exception>
-	internal unsafe Environment(Sdl sdl, SDL_Environment* environmentPtr)
-	{
-		if (sdl is not null)
-		{
-			var sdlDisposeReceiver = new SdlDisposeReceiver(sdl, this);
-
-			if (!sdl.TryRegisterDisposable(sdlDisposeReceiver))
-			{
-				failCouldNotRegisterWithSdl();
-			}
-
-			mSdlDisposeReceiver = sdlDisposeReceiver;
-		}
-
-		mEnvironmentPtr = environmentPtr;
-
-		[DoesNotReturn]
-		static void failCouldNotRegisterWithSdl() => throw new InvalidOperationException($"Couldn't register the {nameof(Environment)} with the given {nameof(Sdl)} instance");
 	}
 
 	/// <inheritdoc/>
-	~Environment() => Dispose(deregister: true);
+	~Environment() => Dispose(forget: true, deregisterFromSdl: true);
 
 	/// <inheritdoc/>
 	public void Dispose()
 	{
 		GC.SuppressFinalize(this);
-		Dispose(deregister: true);
+		Dispose(forget: true, deregisterFromSdl: true);
 	}
 
-	private void DisposeFromSdl()
-	{		
+	void Sdl.IDisposeReceiver.DisposeFromSdl(Sdl sdl)
+	{
 #pragma warning disable IDE0079
 #pragma warning disable CA1816
 		GC.SuppressFinalize(this);
 #pragma warning restore CA1816
 #pragma warning restore IDE0079
-		Dispose(deregister: false);
+		Dispose(forget: true, deregisterFromSdl: false);
 	}
 
-	private unsafe void Dispose(bool deregister)
+	private unsafe void Dispose(bool forget, bool deregisterFromSdl)
 	{
-		if (mEnvironmentPtr is not null)
+		if (mEnvironment is not null)
 		{
-			if (mSdlDisposeReceiver is not null)
+			if (deregisterFromSdl)
 			{
-				if (deregister && mSdlDisposeReceiver.Sdl is { } sdl)
-				{
-					sdl.TryDeregisterDisposable(mSdlDisposeReceiver);
-				}
-				
-				mSdlDisposeReceiver.Dispose();
-				mSdlDisposeReceiver = null;
+				Sdl.TryDeregisterDisposable(this);
 			}
 
-			SDL_DestroyEnvironment(mEnvironmentPtr);
+			SDL_DestroyEnvironment(mEnvironment);
 
-			mEnvironmentPtr = null;
+			if (forget)
+			{
+				mKnownInstance.TryRemove(unchecked((IntPtr)mEnvironment), out _);
+			}
+
+			mEnvironment = null;
 		}
 	}
 
@@ -131,7 +180,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 	{
 		unsafe
 		{
-			return other is { mEnvironmentPtr: var otherPtr } && mEnvironmentPtr == otherPtr;
+			return other is { mEnvironment: var otherPtr } && mEnvironment == otherPtr;
 		}
 	}
 
@@ -140,8 +189,30 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 	{
 		unsafe
 		{
-			return unchecked((IntPtr)mEnvironmentPtr).GetHashCode();
+			return unchecked((IntPtr)mEnvironment).GetHashCode();
 		}
+	}
+
+	internal unsafe static bool TryGetOrCreate(SDL_Environment* environment, [NotNullWhen(true)] out Environment? result, bool registerWithSdl = true)
+	{
+		if (environment is null)
+		{
+			result = null;
+			return false;
+		}
+
+		var environmentRef = mKnownInstance.GetOrAdd(unchecked((IntPtr)environment), createRef, registerWithSdl);
+
+		if (!environmentRef.TryGetTarget(out result))
+		{
+			environmentRef.SetTarget(result = create(environment, registerWithSdl));
+		}
+
+		return true;
+
+		static WeakReference<Environment> createRef(IntPtr environment, bool registerWithSdl) => new(create(unchecked((SDL_Environment*)environment), registerWithSdl));
+
+		static Environment create(SDL_Environment* environment, bool registerWithSdl) => new(environment, registerWithSdl);
 	}
 
 	/// <summary>
@@ -181,7 +252,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 	/// This method uses SDL's cached copy of the process environment and therefore is thread-safe.
 	/// </para>
 	/// <para>
-	/// Alternatively to this method, you could use <see cref="TryGetVariable(string, out string?)"/> on <see cref="Sdl.ProcessEnvironment"/> instead.
+	/// Alternatively to this method, you could use <see cref="TryGetVariable(string, out string?)"/> on the value of the <see cref="ProcessEnvironment"/> property instead.
 	/// </para>
 	/// </remarks>
 	public static bool TryGetProcessVariable(string name, [NotNullWhen(true)] out string? value)
@@ -256,7 +327,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 	/// <returns><c><see langword="true"/></c> if the process environment variable was successfully set to <paramref name="value"/>, or if <paramref name="overwrite"/> was set to <c><see langword="false"/></c> and the environment variable already existed; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 	/// <remarks>
 	/// <para>
-	/// This method is <em>not</em> thread-safe, consider using <see cref="TrySetVariable(string, string, bool)"/> on <see cref="Sdl.ProcessEnvironment"/> instead.
+	/// This method is <em>not</em> thread-safe, consider using <see cref="TrySetVariable(string, string, bool)"/> on the value of the <see cref="ProcessEnvironment"/> property instead.
 	/// </para>
 	/// </remarks>
 	public static bool TrySetProcessVariableUnsafe(string name, string value, bool overwrite = true)
@@ -285,7 +356,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 	/// <returns><c><see langword="true"/></c> if the process environment variable was successfully cleared; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 	/// <remarks>
 	/// <para>
-	/// This method is <em>not</em> thread-safe, consider using <see cref="TryUnsetVariable(string)"/> on <see cref="Sdl.ProcessEnvironment"/> instead.
+	/// This method is <em>not</em> thread-safe, consider using <see cref="TryUnsetVariable(string)"/> on the value of the <see cref="ProcessEnvironment"/> property instead.
 	/// </para>
 	/// </remarks>
 	public static bool TryUnsetProcessVariableUnsafe(string name)
@@ -319,7 +390,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 
 			try
 			{
-				if (SDL_GetEnvironmentVariable(mEnvironmentPtr, nameUtf8) is var valuePtr && valuePtr is not null)
+				if (SDL_GetEnvironmentVariable(mEnvironment, nameUtf8) is var valuePtr && valuePtr is not null)
 				{
 					value = Utf8StringMarshaller.ConvertToManaged(valuePtr);
 					return value is not null;
@@ -355,7 +426,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 
 			try
 			{
-				return SDL_SetEnvironmentVariable(mEnvironmentPtr, nameUtf8, valueUtf8, overwrite);
+				return SDL_SetEnvironmentVariable(mEnvironment, nameUtf8, valueUtf8, overwrite);
 			}
 			finally
 			{				
@@ -378,7 +449,7 @@ public sealed partial class Environment : IDisposable, IEnumerable<KeyValuePair<
 
 			try
 			{
-				return SDL_UnsetEnvironmentVariable(mEnvironmentPtr, nameUtf8);
+				return SDL_UnsetEnvironmentVariable(mEnvironment, nameUtf8);
 			}
 			finally
 			{

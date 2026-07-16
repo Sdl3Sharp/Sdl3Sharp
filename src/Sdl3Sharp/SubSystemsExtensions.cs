@@ -1,4 +1,6 @@
-﻿namespace Sdl3Sharp;
+﻿using System.Runtime.CompilerServices;
+
+namespace Sdl3Sharp;
 
 /// <summary>
 /// Provides extensions methods and properties for <see cref="SubSystems"/>

@@ -95,20 +95,23 @@ MessageBox.TryShowSimple(MessageBoxFlags.Information, "Hello World", "Hello Worl
 #### Rendering a triangle
 
 ```csharp
-using var sdl = new Sdl(static builder => builder
-    .SetAppName("Simple SDL3# Triangle example")
-    .InitializeSubSystems(SubSystems.Video)
-);
+return new MyApp().Run(args);
 
-return sdl.Run(new App(), args);
-
-class App : AppBase
+class MyApp : App
 {
+    private Sdl mSdl = default!;
     private Window mWindow = default!;
     private Renderer mRenderer = default!;
 
-    protected override AppResult OnInitialize(Sdl sdl, string[] args)
+    // Called once at the start of the application:
+    //   Initialize SDL and whatever resources you need for your application.
+    protected override AppResult OnInitialize(string[] args)
     {
+        mSdl = new Sdl(static builder => builder
+            .SetAppName("Simple SDL3# Triangle example")
+            .InitializeSubSystems(SubSystems.Video)
+        );
+
         if (!Window.TryCreateWithRenderer("Hello World", 800, 600, out mWindow!, out mRenderer!))
         {
             return Failure;
@@ -117,7 +120,9 @@ class App : AppBase
         return Continue;
     }
 
-    protected override AppResult OnIterate(Sdl sdl)
+    // Called once per frame:
+    //   Update your application state and render the next frame.
+    protected override AppResult OnIterate()
     {
         mRenderer.DrawColorFloat = (0, 0, 0, 1);
         mRenderer.TryClear();
@@ -133,7 +138,9 @@ class App : AppBase
         return Continue;
     }
 
-    protected override AppResult OnEvent(Sdl sdl, ref Event @event)
+    // Called once per event whenever an event is received:
+    //   Handle the event and update your application state accordingly.
+    protected override AppResult OnEvent(ref Event @event)
     {
         if (@event.Type is EventType.WindowCloseRequested)
         {
@@ -143,20 +150,33 @@ class App : AppBase
         return Continue;
     }
 
-    protected override void OnQuit(Sdl sdl, AppResult result)
+    // Called whenever there was an unhandled exception in OnInitialize, OnIterate, or OnEvent:
+    //   If possible, recover from the exception and continue, otherwise possibly log the exception and terminate the application gracefully.
+    protected override AppResult OnUnhandledException(ExceptionDispatchInfo info, AppUnhandledExceptionSource source)
+    {
+        MessageBox.TryShowSimple(MessageBoxFlags.Error, "Unhandled Exception", $"An unhandled exception occurred in {source}: [{info.SourceException.GetType().Name}] {info.SourceException.Message}");
+        return Failure;
+    }
+
+    // Called once at the end of the application (OnInitialize, OnIterate, OnEvent, or OnUnhandledException returned Failure or Success):
+    //   Clean up any resources you allocated and deinitialize SDL.
+    protected override void OnQuit(AppResult result)
     {
         mRenderer?.Dispose();
         mRenderer = default!;
 
         mWindow?.Dispose();
         mWindow = default!;
+
+        mSdl?.Dispose();
+        mSdl = default!;
     }
 }
 ```
 
-The example above makes use of the `AppBase` lifetime model, where SDL3# manages the main loop for you. You implement `OnInitialize`, `OnIterate`, and `OnEvent` as callbacks, and SDL3# takes care of the rest.
+The example above makes use of the `App` lifetime model, where SDL3# manages the main loop for you. You implement can `OnInitialize`, `OnIterate`, `OnEvent`, and `OnUnhandledException` as callbacks, and SDL3# takes care of the rest.
 
-If you prefer to manage the main loop yourself, you can do so: you still initialize SDL via `new Sdl(...)` and pump events on your own, without using `AppBase` at all.
+If you prefer to manage the main loop yourself, you can do so: you still initialize SDL via `new Sdl(...)` and pump events on your own, without using `App` at all.
 
 ## A note on AI usage
 

@@ -40,14 +40,14 @@ partial class Environment
 					failEnvironmentArgumentNull();
 				}
 
-				if (environment.mEnvironmentPtr is null)
+				if (environment.mEnvironment is null)
 				{
 					// We intentionally do throw an exception here, as opposed to simply returning false,
 					// because this is not an error while creating the enumerator
 					failEnvironmentDisposed();
 				}
 
-				var array = SDL_GetEnvironmentVariables(environment.mEnvironmentPtr);
+				var array = SDL_GetEnvironmentVariables(environment.mEnvironment);
 
 				if (array is null)
 				{

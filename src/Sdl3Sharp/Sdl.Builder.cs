@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 
@@ -9,52 +7,47 @@ namespace Sdl3Sharp;
 partial class Sdl
 {
 	/// <summary>
-	/// A builder that lets you perfom some preliminaries right before SDL gets initialized 
+	/// A builder that lets you perfom some preliminaries right before an <see cref="Sdl"/> instance is created
 	/// </summary>
 	[StructLayout(LayoutKind.Sequential)]
 	public readonly ref struct Builder
 	{
-		private readonly Sdl mSdl;
 		private readonly ref SubSystems mSubSystems;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		internal Builder(Sdl sdl, ref SubSystems subSystems) { mSdl = sdl; mSubSystems = ref subSystems; }
+		internal Builder(ref SubSystems subSystems) => mSubSystems = ref subSystems;
 
 		/// <summary>
-		/// Sets certain <see cref="SubSystems">sub systems</see> to be <em>not</em> initialized with SDL
+		/// Sets certain <see cref="SubSystems">sub systems</see> to be <em>not</em> initialized with the <see cref="Sdl"/> instance
 		/// </summary>
-		/// <param name="subSystems"><see cref="SubSystems">Sub systems</see> to be <em>not</em> initialized with SDL</param>
+		/// <param name="subSystems"><see cref="SubSystems">Sub systems</see> to be <em>not</em> initialized with the <see cref="Sdl"/> instance</param>
 		/// <returns>The current <see cref="Builder"/> so that additional calls can be chained</returns>
 		/// <remarks>
-		/// NOTE: This does not prevent depend sub system from being initialized (e.g. <see cref="SubSystems.Events"/> when <see cref="SubSystems.Audio"/> should be initialized)
+		/// <para>
+		/// Note that this does not prevent depend sub system from being initialized (e.g. <see cref="SubSystems.Events"/> when <see cref="SubSystems.Audio"/> should be initialized).
+		/// It also does not deinitialize any sub systems that have already been initialized (e.g. if you create a new instance of <see cref="Sdl"/>).
+		/// </para>
 		/// </remarks>
-		/// <inheritdoc cref="Validate"/>
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 		public readonly Builder DontInitializeSubSystems(SubSystems subSystems)
 		{
-			Validate();
-
 			mSubSystems &= ~subSystems;
 
 			return this;
 		}
 
 		/// <summary>
-		/// Sets certain <see cref="SubSystems">sub systems</see> to be initialized with SDL
+		/// Sets certain <see cref="SubSystems">sub systems</see> to be initialized with the <see cref="Sdl"/> instance
 		/// </summary>
-		/// <param name="subSystems"><see cref="SubSystems">Sub systems</see> to be initialized with SDL</param>
+		/// <param name="subSystems"><see cref="SubSystems">Sub systems</see> to be initialized with the <see cref="Sdl"/> instance</param>
 		/// <returns>The current <see cref="Builder"/> so that additional calls can be chained</returns>
-		/// <inheritdoc cref="Validate"/>
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 		public readonly Builder InitializeSubSystems(SubSystems subSystems)
 		{
-			Validate();
-
 			mSubSystems |= subSystems;
 
 			return this;
 		}
-
 
 		/// <summary>
 		/// Tries to set metadata about your app
@@ -75,13 +68,13 @@ partial class Sdl
 		/// </para>
 		/// <para>
 		/// Multiple calls to this method with the same <paramref name="name"/> value are allowed, but various state might not change once it has been already set up.
+		/// You should only try to set metadata once, and only when creating the very first instance of <see cref="Sdl"/>. If you try to set metadata after that, it will likely fail.
 		/// </para>
 		/// </remarks>
-		/// <inheritdoc cref="Validate"/>
+#pragma warning disable CA1822 // This is intentionally an instance method, because it is part of the builder pattern and should be called on a Builder instance
 		public readonly bool TrySetMetadata(string name, string? value)
+#pragma warning restore CA1822 
 		{
-			Validate();
-
 			unsafe
 			{
 				var nameUtf8 = Utf8StringMarshaller.ConvertToUnmanaged(name);
@@ -119,16 +112,16 @@ partial class Sdl
 		/// </para>
 		/// <para>
 		/// Multiple calls to this method are allowed, but various state might not change once it has been already set up.
+		/// You should only try to set metadata once, and only when creating the very first instance of <see cref="Sdl"/>. If you try to set metadata after that, it will likely fail.
 		/// </para>
 		/// <para>
 		/// This is a simplified interface for the most important information. You can supply significantly more detailed metadata with <see cref="TrySetMetadata(string, string?)"/>.
 		/// </para>
 		/// </remarks>
-		/// <inheritdoc cref="Validate"/>
+#pragma warning disable CA1822 // This is intentionally an instance method, because it is part of the builder pattern and should be called on a Builder instance
 		public readonly bool TrySetMetadata(string? appName, string? appVersion, string? appIdentifier)
+#pragma warning restore CA1822
 		{
-			Validate();
-
 			unsafe
 			{
 				var appNameUtf8 = Utf8StringMarshaller.ConvertToUnmanaged(appName);
@@ -146,20 +139,6 @@ partial class Sdl
 					Utf8StringMarshaller.Free(appNameUtf8);
 				}
 			}
-		}
-
-		/// <exception cref="InvalidOperationException">The <see cref="Builder"/> is used outside of the initialization process of a <see cref="Sdl"/> instance</exception>
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		[MemberNotNull(nameof(mSdl))]
-		private void Validate()
-		{
-			if (mSdl?.mLifetimeState is not LifetimeState.Initializing || Unsafe.IsNullRef(ref mSubSystems))
-			{
-				failInvalidBuilder();
-			}
-
-			[DoesNotReturn]
-			static void failInvalidBuilder() => throw new InvalidOperationException($"The {nameof(Builder)} is used outside of the initialization process of a {nameof(Sdl)} instance");
 		}
 	}
 }

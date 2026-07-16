@@ -24,7 +24,7 @@ partial class Environment
 			{
 				unsafe
 				{
-					if (environment is { mEnvironmentPtr: not null } && SDL_GetEnvironmentVariables(environment.mEnvironmentPtr) is var array && array is not null)
+					if (environment is { mEnvironment: not null } && SDL_GetEnvironmentVariables(environment.mEnvironment) is var array && array is not null)
 					{
 						try
 						{

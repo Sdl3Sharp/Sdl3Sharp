@@ -5,11 +5,6 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
-using unsafe SDL_AppEvent_func = delegate* unmanaged[Cdecl]<void*, Sdl3Sharp.Events.Event*, Sdl3Sharp.AppResult>;
-using unsafe SDL_AppInit_func = delegate* unmanaged[Cdecl]<void**, int, byte**, Sdl3Sharp.AppResult>;
-using unsafe SDL_AppIterate_func = delegate* unmanaged[Cdecl]<void*, Sdl3Sharp.AppResult>;
-using unsafe SDL_AppQuit_func = delegate* unmanaged[Cdecl]<void*, Sdl3Sharp.AppResult, void>;
-using unsafe SDL_main_func = delegate* unmanaged[Cdecl]<int, byte**, int>;
 
 namespace Sdl3Sharp;
 
@@ -22,25 +17,6 @@ partial class Sdl
     private unsafe delegate int Main(int argc, byte** argv);
 
     /// <summary>
-    /// An entry point for SDL's use in <see href="https://wiki.libsdl.org/SDL3/SDL_MAIN_USE_CALLBACKS">SDL_MAIN_USE_CALLBACKS</see>
-    /// </summary>
-    /// <param name="argc">standard Unix main argc</param>
-    /// <param name="argv">standard Unix main argv</param>
-    /// <param name="appinit">the application's <see href="https://wiki.libsdl.org/SDL3/SDL_AppInit">SDL_AppInit</see> function</param>
-    /// <param name="appiter">the application's <see href="https://wiki.libsdl.org/SDL3/SDL_AppIterate">SDL_AppIterate</see> function</param>
-    /// <param name="appevent">the application's <see href="https://wiki.libsdl.org/SDL3/SDL_AppEvent">SDL_AppEvent</see> function</param>
-    /// <param name="appquit">the application's <see href="https://wiki.libsdl.org/SDL3/SDL_AppQuit">SDL_AppQuit</see> function</param>
-    /// <returns>Returns standard Unix main return value</returns>
-    /// <remarks>
-    /// Generally, you should not call this function directly. This only exists to hand off work into SDL as soon as possible, where it has a lot more control and functionality available, and make the inline code in <see href="https://wiki.libsdl.org/SDL3/SDL_main">SDL_main</see>.h as small as possible.
-    ///
-    /// Not all platforms use this, it's actual use is hidden in a magic header-only library, and you should not call this directly unless you <em>really</em> know what you're doing.
-    /// </remarks>
-    /// <seealso href="https://wiki.libsdl.org/SDL3/SDL_EnterAppMainCallbacks">SDL_EnterAppMainCallbacks</seealso>
-    [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
-    internal unsafe static partial int SDL_EnterAppMainCallbacks(int argc, byte** argv, SDL_AppInit_func appinit, SDL_AppIterate_func appiter, SDL_AppEvent_func appevent, SDL_AppQuit_func appquit);
-
-    /// <summary>
     /// Get metadata about your app
     /// </summary>
     /// <param name="name">the name of the metadata property to get</param>
@@ -51,14 +27,6 @@ partial class Sdl
     /// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetAppMetadataProperty">SDL_GetAppMetadataProperty</seealso>
     [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
     internal unsafe static partial byte* SDL_GetAppMetadataProperty(byte* name);    
-
-    /// <summary>
-    /// Get the global SDL properties
-    /// </summary>
-    /// <returns>Returns a valid property ID on success or 0 on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError()</see> for more information</returns>
-    /// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetGlobalProperties">SDL_GetGlobalProperties</seealso>
-    [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
-    internal static partial uint SDL_GetGlobalProperties();
 
     /// <summary>
     /// Get the code revision of SDL that is linked against your program
@@ -145,39 +113,45 @@ partial class Sdl
     [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial CBool SDL_Init(SubSystems flags);
 
-    /// <summary>
-    /// Clean up all initialized subsystems
-    /// </summary>
-    /// <remarks>
-    /// You should call this function even if you have already shutdown each initialized subsystem with <see href="https://wiki.libsdl.org/SDL3/SDL_QuitSubSystem">SDL_QuitSubSystem</see>(). It is safe to call this function even in the case of errors in initialization.
-    /// 
-    /// You can use this function with atexit() to ensure that it is run when your application is shutdown, but it is not wise to do this from a library or other dynamically loaded code.
-    /// </remarks>
-    /// <seealso href="https://wiki.libsdl.org/SDL3/SDL_Quit">SDL_Quit</seealso>
-    [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	/// <summary>
+	/// Compatibility function to initialize the SDL library
+	/// </summary>
+	/// <param name="flags">any of the flags used by <see href="https://wiki.libsdl.org/SDL3/SDL_Init">SDL_Init</see>(); see <see href="https://wiki.libsdl.org/SDL3/SDL_Init">SDL_Init</see> for details</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>This function and <see href="https://wiki.libsdl.org/SDL3/SDL_Init">SDL_Init</see>() are interchangeable</remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_InitSubSystem">SDL_InitSubSystem</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal static partial CBool SDL_InitSubSystem(SubSystems flags);
+
+	/// <summary>
+	/// Clean up all initialized subsystems
+	/// </summary>
+	/// <remarks>
+	/// You should call this function even if you have already shutdown each initialized subsystem with <see href="https://wiki.libsdl.org/SDL3/SDL_QuitSubSystem">SDL_QuitSubSystem</see>(). It is safe to call this function even in the case of errors in initialization.
+	/// 
+	/// You can use this function with atexit() to ensure that it is run when your application is shutdown, but it is not wise to do this from a library or other dynamically loaded code.
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_Quit">SDL_Quit</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial void SDL_Quit();
 
-    /// <summary>
-    /// Initializes and launches an SDL application, by doing platform-specific initialization before calling your mainFunction and cleanups after it returns, if that is needed for a specific platform, otherwise it just calls mainFunction
-    /// </summary>
-    /// <param name="argc">the argc parameter from the application's main() function, or 0 if the platform's main-equivalent has no argc</param>
-    /// <param name="argv">the argv parameter from the application's main() function, or NULL if the platform's main-equivalent has no argv</param>
-    /// <param name="mainFunction">your SDL app's C-style main(). NOT the function you're calling this from! Its name doesn't matter; it doesn't literally have to be <c>main</c>.</param>
-    /// <param name="reserved">should be NULL (reserved for future use, will probably be platform-specific then)</param>
-    /// <returns>Returns the return value from mainFunction: 0 on success, otherwise failure; <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() might have more information on the failure</returns>
-    /// <remarks>
-    /// You can use this if you want to use your own main() implementation without using <see href="https://wiki.libsdl.org/SDL3/SDL_main">SDL_main</see> (like when using <see href="https://wiki.libsdl.org/SDL3/SDL_MAIN_HANDLED">SDL_MAIN_HANDLED</see>). When using this, you do <em>not</em> need <see href="https://wiki.libsdl.org/SDL3/SDL_SetMainReady">SDL_SetMainReady</see>().
-    /// </remarks>
-    /// <seealso href="https://wiki.libsdl.org/SDL3/SDL_RunApp">SDL_RunApp</seealso>
-    [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
-    internal unsafe static partial int SDL_RunApp(int argc, byte** argv, SDL_main_func mainFunction, void* reserved);
+	/// <summary>
+	/// Shut down specific SDL subsystems
+	/// </summary>
+	/// <param name="flags">any of the flags used by <see href="https://wiki.libsdl.org/SDL3/SDL_Init">SDL_Init</see>(); see <see href="https://wiki.libsdl.org/SDL3/SDL_Init">SDL_Init</see> for details</param>
+	/// <remarks>
+	/// You still need to call <see href="https://wiki.libsdl.org/SDL3/SDL_Quit">SDL_Quit</see>() even if you close all open subsystems with <see href="https://wiki.libsdl.org/SDL3/SDL_QuitSubSystem">SDL_QuitSubSystem</see>()
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_QuitSubSystem">SDL_QuitSubSystem</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal static partial void SDL_QuitSubSystem(SubSystems flags);
 
     /// <summary>
     /// Specify basic metadata about your app
     /// </summary>
-    /// <param name="appname">The name of the application ("My Game 2: Bad Guy's Revenge!")</param>
-    /// <param name="appversion">The version of the application ("1.0.0beta5" or a git hash, or whatever makes sense)</param>
-    /// <param name="appidentifier">A unique string in reverse-domain format that identifies this app ("com.example.mygame2")</param>
+    /// <param name="appname">The name of the application (e.g., "My Game 2: Bad Guy's Revenge!")</param>
+    /// <param name="appversion">The version of the application (e.g., "1.0.0beta5" or a git hash, or whatever makes sense)</param>
+    /// <param name="appidentifier">A unique string in reverse-domain format that identifies this app (e.g., "com.example.mygame2")</param>
     /// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
     /// <remarks>
     /// You can optionally provide metadata about your app to SDL. This is not required, but strongly encouraged.
@@ -253,140 +227,5 @@ partial class Sdl
     /// <returns>Returns a mask of all initialized subsystems if <c><paramref name="flags"/></c> is 0, otherwise it returns the initialization status of the specified subsystems</returns>
     /// <seealso href="https://wiki.libsdl.org/SDL3/SDL_WasInit">SDL_WasInit</seealso>
     [NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
-    internal static partial SubSystems SDL_WasInit(SubSystems flags);
-
-    private unsafe int RunImpl(AppBase app, int argc, byte** argv)
-    {
-        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-        unsafe static AppResult appiterate(void* appstate)
-        {
-            if (appstate is not null && GCHandle.FromIntPtr(unchecked((IntPtr)appstate)) is { IsAllocated: true, Target: Sdl { mRunningApp: AppBase app } sdl } gcHandle)
-            {
-                try
-                {
-                    return app.OnIterateInternal(sdl);
-                }
-                catch
-                {
-                    gcHandle.Free();
-
-                    throw;
-                }
-            }
-
-            return AppResult.Failure;
-        }
-
-        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-        unsafe static AppResult appevent(void* appstate, Event* @event)
-        {
-            if (appstate is not null && GCHandle.FromIntPtr(unchecked((IntPtr)appstate)) is { IsAllocated: true, Target: Sdl { mRunningApp: AppBase app } sdl } gcHandle)
-            {
-                try
-                {
-                    return app.OnEventInternal(sdl, ref Unsafe.AsRef<Event>(@event));
-                }
-                catch
-                {
-                    gcHandle.Free();
-
-                    throw;
-                }
-            }
-
-            return AppResult.Failure;
-        }
-
-        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-        unsafe static void appquit(void* appstate, AppResult result)
-        {
-            if (appstate is not null && GCHandle.FromIntPtr(unchecked((IntPtr)appstate)) is { IsAllocated: true, Target: Sdl { mRunningApp: AppBase app } sdl } gcHandle)
-            {
-                try
-                {
-                    app.OnQuitInternal(sdl, result);
-                }
-                finally
-                {
-                    gcHandle.Free();
-                }
-            }
-        }
-
-        Main? mainDelegate = main;
-
-        int main(int argc, byte** argv)
-        {
-            mainDelegate = null;
-
-            AppInit? appInitDelegate = appinit;
-
-            AppResult appinit(void** appstate, int argc, byte** argv)
-            {
-                appInitDelegate = null;
-
-                *appstate = unchecked((void*)GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Normal)));
-
-                string[] args;
-
-                if (argv is not null)
-                {
-                    args = GC.AllocateUninitializedArray<string>(argc);
-
-                    foreach (ref var arg in args.AsSpan())
-                    {
-                        arg = Utf8StringMarshaller.ConvertToManaged(*argv++);
-                    }
-                }
-                else
-                {
-                    args = [];
-                }
-
-                try
-                {
-                    if (mRunningApp is AppBase app)
-                    {
-                        return app.OnInitializeInternal(this, args);
-                    }
-
-                    return AppResult.Failure;
-                }
-                catch
-                {
-                    if (GCHandle.FromIntPtr(unchecked((IntPtr)(*appstate))) is { IsAllocated: true, Target: Sdl } gcHandle)
-                    {
-                        gcHandle.Free();
-                    }
-                    *appstate = null;
-
-                    throw;
-                }
-            } // appinit
-
-            try
-            {
-                return SDL_EnterAppMainCallbacks(argc, argv, unchecked((SDL_AppInit_func)Marshal.GetFunctionPointerForDelegate(appInitDelegate)), &appiterate, &appevent, &appquit);
-            }
-            finally
-            {
-                // just to make sure
-                appInitDelegate = null;
-            }
-        } // main
-
-        try
-        {
-            mRunningApp = app;
-
-            return SDL_RunApp(argc, argv, unchecked((SDL_main_func)Marshal.GetFunctionPointerForDelegate(mainDelegate)), reserved: null);
-        }
-        finally
-        {
-            mRunningApp = null;
-
-            // just to make sure
-            mainDelegate = null;
-        }
-    }
+    internal static partial SubSystems SDL_WasInit(SubSystems flags);    
 }

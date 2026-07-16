@@ -1038,7 +1038,7 @@ public static partial class Platform
 	/// <returns><c><see langword="true"/></c> if animation callback was succesfully set; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
 	/// <remarks>
 	/// <para>
-	/// Note: if you use <see cref="AppBase"/>, especially <see cref="AppBase.OnIterate(Sdl)"/>, you don't have to use this API, as SDL will manage this for you.
+	/// Note that if you use an <see cref="App"/>'s execution model, especially <see cref="App.OnIterate()"/>, you don't have to use this API, as SDL will manage this for you.
 	/// </para>
 	/// <para>
 	/// Note: This method is only available on <em>Apple iOS</em> and will throw a <see cref="PlatformNotSupportedException"/> on all other platforms!

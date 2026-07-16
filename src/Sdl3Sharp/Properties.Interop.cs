@@ -129,6 +129,14 @@ partial class Properties
 	internal unsafe static partial float SDL_GetFloatProperty(uint props, byte* name, float default_value);
 
 	/// <summary>
+	/// Get the global SDL properties
+	/// </summary>
+	/// <returns>Returns a valid property ID on success or 0 on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError()</see> for more information</returns>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetGlobalProperties">SDL_GetGlobalProperties</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal static partial uint SDL_GetGlobalProperties();
+
+	/// <summary>
 	/// Get a number property from a group of properties
 	/// </summary>
 	/// <param name="props">the properties to query</param>
