@@ -11,7 +11,7 @@
 
     <LibffiTestPackageVersion Condition="'$(LibffiTestPackageVersion)' == ''">3.6.0-r.0</LibffiTestPackageVersion>
     <UseNativeTestPackage Condition="'$(UseNativeTestPackage)' == ''">true</UseNativeTestPackage>
-    <SdlTestPackageVersion Condition="'$(SdlTestPackageVersion)' == ''">3.4.10-r.0</SdlTestPackageVersion>
+    <SdlTestPackageVersion Condition="'$(SdlTestPackageVersion)' == ''">3.4.12-r.1</SdlTestPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
