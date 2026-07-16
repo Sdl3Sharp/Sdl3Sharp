@@ -514,7 +514,7 @@ public abstract partial class Display : IFormattable, ISpanFormattable
 				return SDL_GetDisplayProperties(mDisplayId) switch
 				{
 					0 => null,
-					var id => Properties.GetOrCreate(sdl: null, id)
+					var id => Properties.GetOrCreate(id, registerWithSdl: false)
 				};
 			}
 		}

@@ -461,7 +461,7 @@ public abstract partial class Texture : IDisposable
 				return SDL_GetTextureProperties(mTexture) switch
 				{
 					0 => null,
-					var id => Properties.GetOrCreate(sdl: null, id)
+					var id => Properties.GetOrCreate(id, registerWithSdl: false)
 				};
 			}
 		}

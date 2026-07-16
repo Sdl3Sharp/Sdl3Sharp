@@ -1064,7 +1064,7 @@ public partial class Surface : IDisposable
 				return SDL_GetSurfaceProperties(mSurface) switch
 				{
 					0 => null,
-					var id => Properties.GetOrCreate(sdl: null, id)
+					var id => Properties.GetOrCreate(id, registerWithSdl: false)
 				};
 			}
 		}

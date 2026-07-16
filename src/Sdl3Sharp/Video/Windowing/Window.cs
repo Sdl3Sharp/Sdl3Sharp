@@ -790,6 +790,43 @@ public abstract partial class Window : IDisposable
 		&& hdrEnabled;
 
 	/// <summary>
+	/// Gets or sets a value indicating whether the window is in relative mouse mode
+	/// </summary>
+	/// <value>
+	/// A value indicating whether the window is in relative mouse mode
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// While the window has focus and relative mouse mode is enabled, the cursor is hidden, the mouse position is constrained to the window,
+	/// and SDL will report continuous relative mouse motion even if the mouse is at the edge of the window.
+	/// </para>
+	/// <para>
+	/// If you'd like to keep the mouse position fixed while in relative mode you can use the <see cref="MouseRect"/> property.
+	/// If you'd like the cursor to be at a specific location when relative mode ends, you should use <see cref="WarpMouseInWindow"/> before disabling relative mode.
+	/// </para>
+	/// <para>
+	/// This property should only be accessed from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool IsRelativeMouseModeEnabled
+	{
+		get
+		{
+			unsafe
+			{
+				return SDL_GetWindowRelativeMouseMode(mWindow);
+			}
+		}
+		set
+		{
+			unsafe
+			{
+				SdlErrorHelper.ThrowIfFailed(SDL_SetWindowRelativeMouseMode(mWindow, value));
+			}
+		}
+	}
+
+	/// <summary>
 	/// Gets or sets a value indicating whether the window is modal
 	/// </summary>
 	/// <value>
@@ -1256,7 +1293,7 @@ public abstract partial class Window : IDisposable
 				return SDL_GetWindowProperties(mWindow) switch
 				{
 					0 => null,
-					var id => Properties.GetOrCreate(sdl: null, id)
+					var id => Properties.GetOrCreate(id, registerWithSdl: false)
 				};
 			}
 		}

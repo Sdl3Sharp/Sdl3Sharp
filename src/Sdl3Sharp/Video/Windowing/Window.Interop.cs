@@ -1161,6 +1161,20 @@ partial class Window
 	internal unsafe static partial uint SDL_GetWindowProperties(SDL_Window* window);
 
 	/// <summary>
+	/// Queries whether relative mouse mode is enabled for a window
+	/// </summary>
+	/// <param name="window">The window to query</param>
+	/// <returns>Returns true if relative mode is enabled for a window or false otherwise</returns>
+	/// <remarks>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetWindowRelativeMouseMode">SDL_GetWindowRelativeMouseMode</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_GetWindowRelativeMouseMode(SDL_Window* window);
+
+	/// <summary>
 	/// Gets a list of valid windows
 	/// </summary>
 	/// <param name="count">A pointer filled in with the number of windows returned, may be NULL</param>
@@ -1785,6 +1799,31 @@ partial class Window
 	internal unsafe static partial CBool SDL_SetWindowProgressValue(SDL_Window* window, float value);
 
 #endif
+
+	/// <summary>
+	/// Sets relative mouse mode for a window
+	/// </summary>
+	/// <param name="window">The window to change</param>
+	/// <param name="enabled">True to enable relative mode, false to disable</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// While the window has focus and relative mouse mode is enabled, the cursor is hidden, the mouse position is constrained to the window, and SDL will report continuous relative mouse motion even if the mouse is at the edge of the window.
+	/// </para>
+	/// <para>
+	/// If you'd like to keep the mouse position fixed while in relative mode you can use <see href="https://wiki.libsdl.org/SDL3/SDL_SetWindowMouseRect">SDL_SetWindowMouseRect()</see>.
+	/// If you'd like the cursor to be at a specific location when relative mode ends, you should use <see href="https://wiki.libsdl.org/SDL3/SDL_WarpMouseInWindow">SDL_WarpMouseInWindow</see>() before disabling relative mode.
+	/// </para>
+	/// <para>
+	/// This function will flush any pending mouse motion for this window.
+	/// </para>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_SetWindowRelativeMouseMode">SDL_SetWindowRelativeMouseMode</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_SetWindowRelativeMouseMode(SDL_Window* window, bool enabled);
 
 	/// <summary>
 	/// Sets the user-resizable state of a window.
