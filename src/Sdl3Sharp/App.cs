@@ -13,6 +13,21 @@ namespace Sdl3Sharp;
 /// <summary>
 /// A base class for an application's lifetime model
 /// </summary>
+/// <param name="alwaysCallOnQuit">A value indicating whether the <see cref="OnQuit"/> method should always be called in an <see cref="App"/>'s execution run, even in the case of an unhandled exception</param>
+/// <remarks>
+/// <para>
+/// This class provides a base for creating SDL applications with a defined execution lifetime model.
+/// </para>
+/// <para>
+/// If <paramref name="alwaysCallOnQuit"/> is set to <c><see langword="true"/></c>, the <see cref="OnQuit"/> method will always be called at the end of the <see cref="App"/>'s execution,
+/// even if an exception occurs during the execution of <see cref="OnInitialize(string[])"/>, <see cref="OnIterate()"/>, or <see cref="OnEvent(ref Event)"/> that is not recovered from by <see cref="OnUnhandledException(ExceptionDispatchInfo, AppUnhandledExceptionSource)"/>,
+/// or if <see cref="OnUnhandledException(ExceptionDispatchInfo, AppUnhandledExceptionSource)"/> itself throws an exception.
+/// If <paramref name="alwaysCallOnQuit"/> is set to <c><see langword="false"/></c>, the <see cref="OnQuit"/> method will still be called at the end of the <see cref="App"/>'s execution as part of normal operation,
+/// even if <see cref="OnInitialize(string[])"/>, <see cref="OnIterate()"/>, <see cref="OnEvent(ref Event)"/>, or <see cref="OnUnhandledException(ExceptionDispatchInfo, AppUnhandledExceptionSource)"/> return <see cref="AppResult.Failure"/>,
+/// but it will not be called if any of those methods throw an exception that is not recovered from by <see cref="OnUnhandledException(ExceptionDispatchInfo, AppUnhandledExceptionSource)"/>.
+/// The latter is the default behavior.
+/// </para>
+/// </remarks>
 public abstract partial class App(bool alwaysCallOnQuit = false)
 {
 	/// <summary>Gets <see cref="AppResult.Continue"/></summary>
