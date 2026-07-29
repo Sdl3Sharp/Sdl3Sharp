@@ -3762,6 +3762,105 @@ partial struct Hint
 		public static Hint ZeroCenteredDevices { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new("SDL_JOYSTICK_ZERO_CENTERED_DEVICES"); }
 	}
 
+	/// <summary>SDL_HINT_MOUSE_*</summary>
+	public static class Mouse
+	{
+		/// <summary>
+		/// Gets a hint controlling whether the mouse is captured while mouse buttons are pressed
+		/// </summary>
+		/// <value>
+		/// A hint controlling whether the mouse is captured while mouse buttons are pressed
+		/// </value>
+		/// <remarks>
+		/// <para>
+		/// The hint can be set to the following values:
+		/// <list type="bullet">
+		///		<item>
+		///			<term><c>"0"</c></term>
+		///			<description>The mouse is not captured while mouse buttons are pressed</description>
+		///		</item>
+		///		<item>
+		///			<term><c>"1"</c></term>
+		///			<description>The mouse is captured while mouse buttons are pressed</description>
+		///		</item>
+		/// </list>
+		/// </para>
+		/// <para>
+		/// By default the mouse is captured while mouse buttons are pressed.
+		/// So if the mouse is dragged outside the window, the application continues to receive mouse events until the button is released.
+		/// </para>
+		/// <para>
+		/// This hint can be set anytime.
+		/// </para>
+		/// </remarks>
+		/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_HINT_MOUSE_AUTO_CAPTURE">SDL_HINT_MOUSE_AUTO_CAPTURE</seealso>
+		public static Hint AutoCapture { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new("SDL_MOUSE_AUTO_CAPTURE"); }
+
+#if SDL3_4_0_OR_GREATER
+
+		/// <summary>
+		/// Gets a hint controlling whether we should scale cursors by the current display scale
+		/// </summary>
+		/// <value>
+		/// A hint controlling whether we should scale cursors by the current display scale
+		/// </value>
+		/// <remarks>
+		/// <para>
+		/// The hint can be set to the following values:
+		/// <list type="bullet">
+		///		<item>
+		///			<term><c>"0"</c></term>
+		///			<description>Cursors will not change size based on the display content scale (default)</description>
+		///		</item>
+		///		<item>
+		///			<term><c>"1"</c></term>
+		///			<description>
+		///				Cursors will automatically match the display content scale (e.g. a 2x sized cursor will be used when the window is on a monitor with 200% scale).
+		///				This is currently implemented on Windows.
+		///			</description>
+		///		</item>
+		/// </list>
+		/// </para>
+		/// <para>
+		/// This hint needs to be set before <see cref="">creating cursors</see>.
+		/// </para>
+		/// </remarks>
+		public static Hint DpiScaleCursors { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new("SDL_MOUSE_DPI_SCALE_CURSORS"); }
+
+#endif
+
+		/// <summary>
+		/// Get a hint controlling whether a motion event should be generated for mouse warping in relative mode
+		/// </summary>
+		/// <value>
+		/// A hint controlling whether a motion event should be generated for mouse warping in relative mode
+		/// </value>
+		/// <remarks>
+		///  <para>
+		/// The hint can be set to the following values:
+		/// <list type="bullet">
+		///		<item>
+		///			<term><c>"0"</c></term>
+		///			<description>Warping the mouse will not generate a motion event in relative mode</description>
+		///		</item>
+		///		<item>
+		///			<term><c>"1"</c></term>
+		///			<description>Warping the mouse will generate a motion event in relative mode</description>
+		///		</item>
+		/// </list>
+		/// </para>
+		/// <para>
+		/// By default warping the mouse will not generate motion events in relative mode.
+		/// This avoids the application having to filter out large relative motion due to warping.
+		/// </para>
+		/// <para>
+		/// This hint can be set anytime.
+		/// </para>
+		/// </remarks>
+		/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_HINT_MOUSE_RELATIVE_WARP_MOTION">SDL_HINT_MOUSE_RELATIVE_WARP_MOTION</seealso>
+		public static Hint RelativeWarpMotion { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new("SDL_MOUSE_RELATIVE_WARP_MOTION"); }
+	}
+
 	/// <summary>SDL_HINT_VIDEO_*</summary>
 	public static class Video
 	{
@@ -3840,10 +3939,10 @@ partial struct Hint
 	// TODO
 
 	/// <summary>
-	/// Gets a hint that request <see cref="AppBase.OnIterate(Sdl)"/> to be called at a specific rate
+	/// Gets a hint that request <see cref="App.OnIterate(Sdl)"/> to be called at a specific rate
 	/// </summary>
 	/// <value>
-	/// A hint that request <see cref="AppBase.OnIterate(Sdl)"/> to be called at a specific rate
+	/// A hint that request <see cref="App.OnIterate(Sdl)"/> to be called at a specific rate
 	/// </value>
 	/// <remarks>
 	/// <para>
@@ -3853,7 +3952,7 @@ partial struct Hint
 	/// </para>
 	/// <para>
 	/// There are other string values that have special meaning.
-	/// If set to <c>"waitevent"</c>, <see cref="AppBase.OnIterate(Sdl)"/> will not be called until new event(s) have arrived (and been processed by <see cref="AppBase.OnEvent(Sdl, ref Events.Event)"/>).
+	/// If set to <c>"waitevent"</c>, <see cref="App.OnIterate(Sdl)"/> will not be called until new event(s) have arrived (and been processed by <see cref="App.OnEvent(Sdl, ref Events.Event)"/>).
 	/// This can be useful for apps that are completely idle except in response to input.
 	/// </para>
 	/// <para>
