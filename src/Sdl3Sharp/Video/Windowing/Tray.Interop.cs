@@ -1,5 +1,6 @@
 ﻿using Sdl3Sharp.Internal.Interop;
 using Sdl3Sharp.SourceGeneration;
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
