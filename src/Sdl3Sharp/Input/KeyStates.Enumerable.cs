@@ -14,7 +14,7 @@ partial struct KeyStates
 	/// <param name="keyStates">The <see cref="KeyStates"/> collection to enumerate</param>
 	[StructLayout(LayoutKind.Sequential)]
 	[method: MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public ref struct Enumerator(KeyStates keyStates) : IEnumerator<KeyValuePair<Scancode, bool>>
+	public struct Enumerator(KeyStates keyStates) : IEnumerator<KeyValuePair<Scancode, bool>>
 	{
 		private readonly KeyStates mKeyStates = keyStates;
 		private KeyValuePair<Scancode, bool> mCurrent = new(unchecked(FirstValidScancode - 1), default);
@@ -72,13 +72,9 @@ partial struct KeyStates
 	/// <returns>An <see cref="Enumerator"/> for the current <see cref="KeyStates"/> collection you can use to enumerate its key states</returns>
 	public readonly Enumerator GetEnumerator() => new(this);
 
-	/// <summary>Do not use. Use the <see cref="GetEnumerator"/> method instead.</summary>
-	[Obsolete($"Do not use. Use the {nameof(GetEnumerator)} method instead.")]
-	readonly IEnumerator<KeyValuePair<Scancode, bool>> IEnumerable<KeyValuePair<Scancode, bool>>.GetEnumerator()
-		=> throw new NotSupportedException($"Do not use. Use the {nameof(GetEnumerator)} method instead.");
+	/// <inheritdoc/>
+	readonly IEnumerator<KeyValuePair<Scancode, bool>> IEnumerable<KeyValuePair<Scancode, bool>>.GetEnumerator() => GetEnumerator();
 
-	/// <summary>Do not use. Use the <see cref="GetEnumerator"/> method instead.</summary>
-	[Obsolete($"Do not use. Use the {nameof(GetEnumerator)} method instead.")]
-	readonly IEnumerator IEnumerable.GetEnumerator()
-		=> throw new NotSupportedException($"Do not use. Use the {nameof(GetEnumerator)} method instead.");
+	/// <inheritdoc/>
+	readonly IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

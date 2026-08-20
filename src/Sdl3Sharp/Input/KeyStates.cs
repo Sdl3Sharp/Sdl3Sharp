@@ -11,7 +11,8 @@ namespace Sdl3Sharp.Input;
 /// Represents the states of all keys on the keyboard, where each key is represented by a <see cref="Scancode"/>
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
-public readonly ref partial struct KeyStates : IReadOnlyDictionary<Scancode, bool>
+public readonly partial struct KeyStates : IReadOnlyDictionary<Scancode, bool> // It's fine for `KeyStates` to not be a `ref struct`,
+	                                                                           // the underlying `mStates` pointer is guaranteed to be unchanged and valid for the whole lifetime of the application anyways.
 {
 	private const Scancode FirstValidScancode = Scancode.A,
 						   LastValidScancode = Scancode.EndCall;
@@ -64,6 +65,7 @@ public readonly ref partial struct KeyStates : IReadOnlyDictionary<Scancode, boo
 		}
 	}
 
+	/// <inheritdoc/>
 	IEnumerable<Scancode> IReadOnlyDictionary<Scancode, bool>.Keys
 	{
 		get
@@ -78,6 +80,7 @@ public readonly ref partial struct KeyStates : IReadOnlyDictionary<Scancode, boo
 		}
 	}
 
+	/// <inheritdoc/>
 	IEnumerable<bool> IReadOnlyDictionary<Scancode, bool>.Values
 	{
 		get
@@ -98,10 +101,12 @@ public readonly ref partial struct KeyStates : IReadOnlyDictionary<Scancode, boo
 		}
 	}
 
+	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	readonly bool IReadOnlyDictionary<Scancode, bool>.ContainsKey(Scancode key)
 		=> key is >= FirstValidScancode && key < mEnd && Enum.IsDefined(key);
 
+	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	readonly bool IReadOnlyDictionary<Scancode, bool>.TryGetValue(Scancode key, out bool value)
 	{
