@@ -316,6 +316,7 @@ public readonly partial struct Keyboard :
 	/// <param name="id">The numeric ID of the keyboard</param>
 	/// <param name="keyboard">The <see cref="Keyboard"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="Keyboard"/>)</c></param>
 	/// <returns><c><see langword="true"/></c>, if the <paramref name="id"/> represents a valid <see cref="Keyboard"/>; otherwise, <c><see langword="false"/></c></returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public static bool TryGetFromId(uint id, out Keyboard keyboard)
 	{
 		if (id is 0)

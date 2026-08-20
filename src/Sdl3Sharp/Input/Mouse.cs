@@ -502,6 +502,7 @@ public readonly partial struct Mouse :
 	/// <param name="id">The numeric ID of the mouse</param>
 	/// <param name="mouse">The <see cref="Mouse"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="Mouse"/>)</c></param>
 	/// <returns><c><see langword="true"/></c>, if the <paramref name="id"/> represents a valid <see cref="Mouse"/>; otherwise, <c><see langword="false"/></c></returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public static bool TryGetFromId(uint id, out Mouse mouse)
 	{
 		if (id is 0)
