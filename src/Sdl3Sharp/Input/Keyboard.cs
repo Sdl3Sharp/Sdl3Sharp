@@ -310,6 +310,44 @@ public readonly partial struct Keyboard :
 		}
 	}
 
+	/// <summary>
+	/// Tries to get an existing <see cref="Keyboard"/> by its numeric ID
+	/// </summary>
+	/// <param name="id">The numeric ID of the keyboard</param>
+	/// <param name="keyboard">The existing <see cref="Keyboard"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="Keyboard"/>)</c></param>
+	/// <returns><c><see langword="true"/></c>, if a keyboard with the specified <paramref name="id"/> exists; otherwise, <c><see langword="false"/></c></returns>
+	public static bool TryGetFromId(uint id, out Keyboard keyboard)
+	{
+		unsafe
+		{
+			Unsafe.SkipInit(out int count);
+
+			var keyboards = SDL_GetKeyboards(&count);
+
+			if (keyboards is not null)
+			{
+				try
+				{
+					for (var i = 0; i < count; i++)
+					{
+						if (keyboards[i] == id)
+						{
+							keyboard = new(id);
+							return true;
+						}
+					}
+				}
+				finally
+				{
+					Utilities.NativeMemory.Free(keyboards);
+				}
+			}
+
+			keyboard = default;
+			return false;
+		}
+	}
+
 	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public static bool operator ==(Keyboard left, Keyboard right) => left.Equals(right);

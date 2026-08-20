@@ -8,7 +8,6 @@ using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 
 namespace Sdl3Sharp.Input;
 
@@ -494,6 +493,44 @@ public readonly partial struct Mouse :
 			}
 
 			return SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
+		}
+	}
+
+	/// <summary>
+	/// Tries to get an existing <see cref="Mouse"/> by its numeric ID
+	/// </summary>
+	/// <param name="id">The numeric ID of the mouse</param>
+	/// <param name="mouse">The existing <see cref="Mouse"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="Mouse"/>)</c></param>
+	/// <returns><c><see langword="true"/></c>, if a mouse with the specified <paramref name="id"/> exists; otherwise, <c><see langword="false"/></c></returns>
+	public static bool TryGetFromId(uint id, out Mouse mouse)
+	{
+		unsafe
+		{
+			Unsafe.SkipInit(out int count);
+
+			var mice = SDL_GetMice(&count);
+
+			if (mice is not null)
+			{
+				try
+				{
+					for (var i = 0; i < count; i++)
+					{
+						if (mice[i] == id)
+						{
+							mouse = new(id);
+							return true;
+						}
+					}
+				}
+				finally
+				{
+					Utilities.NativeMemory.Free(mice);
+				}
+			}
+
+			mouse = default;
+			return false;
 		}
 	}
 
