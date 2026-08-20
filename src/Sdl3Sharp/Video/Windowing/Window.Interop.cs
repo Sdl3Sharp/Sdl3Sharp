@@ -63,6 +63,20 @@ partial class Window
 	}
 
 	/// <summary>
+	/// Dismisses the composition window/IME without disabling the subsystem
+	/// </summary>
+	/// <param name="window">The window to affect</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_ClearComposition">SDL_ClearComposition</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_ClearComposition(SDL_Window* window);
+
+	/// <summary>
 	/// Creates a child popup window of the specified parent window
 	/// </summary>
 	/// <param name="parent">The parent of the window, must not be NULL</param>
@@ -603,6 +617,25 @@ partial class Window
 	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetRenderer">SDL_GetRenderer</seealso>
 	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
 	internal unsafe static partial Renderer.SDL_Renderer* SDL_GetRenderer(SDL_Window* window);
+
+	/// <summary>
+	/// Gets the area used to type Unicode text input
+	/// </summary>
+	/// <param name="window">The window for which to query the text input area</param>
+	/// <param name="rect">A pointer to an <see href="https://wiki.libsdl.org/SDL3/SDL_Rect">SDL_Rect</see> filled in with the text input area, may be NULL</param>
+	/// <param name="cursor">A pointer to the offset of the current cursor location relative to <c><paramref name="rect"/>-&gt;x</c>, may be NULL.</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// This returns the values previously set by <see href="https://wiki.libsdl.org/SDL3/SDL_SetTextInputArea">SDL_SetTextInputArea</see>().
+	/// </para>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetTextInputArea">SDL_GetTextInputArea</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_GetTextInputArea(SDL_Window* window, Rect<int>* rect, int* cursor);
 
 	/// <summary>
 	/// Gets the aspect ratio of a window's client area
@@ -1374,6 +1407,39 @@ partial class Window
 	internal unsafe static partial CBool SDL_RestoreWindow(SDL_Window* window);
 
 	/// <summary>
+	/// Checks whether the screen keyboard is shown for given window
+	/// </summary>
+	/// <param name="window">The window for which screen keyboard should be queried</param>
+	/// <returns>Returns true if screen keyboard is shown or false if not</returns>
+	/// <remarks>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_ScreenKeyboardShown">SDL_ScreenKeyboardShown</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_ScreenKeyboardShown(SDL_Window* window);
+
+	/// <summary>
+	/// Sets the area used to type Unicode text input
+	/// </summary>
+	/// <param name="window">The window for which to set the text input area</param>
+	/// <param name="rect">The <see href="https://wiki.libsdl.org/SDL3/SDL_Rect">SDL_Rect</see> representing the text input area, in window coordinates, or NULL to clear it</param>
+	/// <param name="cursor">Tthe offset of the current cursor location relative to <c><paramref name="rect"/>-&gt;x</c>, in window coordinates</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// Native input methods may place a window with word suggestions near the cursor, without covering the text being entered.
+	/// </para>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_SetTextInputArea">SDL_SetTextInputArea</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_SetTextInputArea(SDL_Window* window, Rect<int>* rect, int cursor);
+
+	/// <summary>
 	/// Sets the window to always be above the others
 	/// </summary>
 	/// <param name="window">The window of which to change the always on top state</param>
@@ -1960,6 +2026,128 @@ partial class Window
 	internal unsafe static partial CBool SDL_ShowWindowSystemMenu(SDL_Window* window, int x, int y);
 
 	/// <summary>
+	/// Starts accepting Unicode text input events in a window
+	/// </summary>
+	/// <param name="window">The window to enable text input</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// This function will enable text input (<see href="https://wiki.libsdl.org/SDL3/SDL_EVENT_TEXT_INPUT">SDL_EVENT_TEXT_INPUT</see> and <see href="https://wiki.libsdl.org/SDL3/SDL_EVENT_TEXT_EDITING">SDL_EVENT_TEXT_EDITING</see> events) in the specified window.
+	/// Please use this function paired with <see href="https://wiki.libsdl.org/SDL3/SDL_StopTextInput">SDL_StopTextInput</see>().
+	/// </para>
+	/// <para>
+	/// Text input events are not received by default.
+	/// </para>
+	/// <para>
+	/// On some platforms using this function shows the screen keyboard and/or activates an IME, which can prevent some key press events from being passed through.
+	/// </para>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_StartTextInput">SDL_StartTextInput</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_StartTextInput(SDL_Window* window);
+
+	/// <summary>
+	/// Starts accepting Unicode text input events in a window, with properties describing the input
+	/// </summary>
+	/// <param name="window">The window to enable text input</param>
+	/// <param name="props">The properties to use</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// This function will enable text input (<see href="https://wiki.libsdl.org/SDL3/SDL_EVENT_TEXT_INPUT">SDL_EVENT_TEXT_INPUT</see> and <see href="https://wiki.libsdl.org/SDL3/SDL_EVENT_TEXT_EDITING">SDL_EVENT_TEXT_EDITING</see> events) in the specified window.
+	/// Please use this function paired with <see href="https://wiki.libsdl.org/SDL3/SDL_StopTextInput">SDL_StopTextInput</see>().
+	/// </para>
+	/// <para>
+	/// Text input events are not received by default.
+	/// </para>
+	/// <para>
+	/// On some platforms using this function shows the screen keyboard and/or activates an IME, which can prevent some key press events from being passed through.
+	/// </para>
+	/// <para>
+	/// These are the supported properties:
+	/// <list type="bullet">
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_TYPE_NUMBER"><c>SDL_PROP_TEXTINPUT_TYPE_NUMBER</c></see></term>
+	///			<description>An <see href="https://wiki.libsdl.org/SDL3/SDL_TextInputType">SDL_TextInputType</see> value that describes text being input, defaults to <see href="https://wiki.libsdl.org/SDL3/SDL_TEXTINPUT_TYPE_TEXT">SDL_TEXTINPUT_TYPE_TEXT</see></description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_CAPITALIZATION_NUMBER"><c>SDL_PROP_TEXTINPUT_CAPITALIZATION_NUMBER</c></see></term>
+	///			<description>
+	///				An <see href="https://wiki.libsdl.org/SDL3/SDL_Capitalization">SDL_Capitalization</see> value that describes how text should be capitalized,
+	///				defaults to <see href="https://wiki.libsdl.org/SDL3/SDL_CAPITALIZE_SENTENCES">SDL_CAPITALIZE_SENTENCES</see> for normal text entry,
+	///				<see href="https://wiki.libsdl.org/SDL3/SDL_CAPITALIZE_WORDS">SDL_CAPITALIZE_WORDS</see> for <see href="https://wiki.libsdl.org/SDL3/SDL_TEXTINPUT_TYPE_TEXT_NAME">SDL_TEXTINPUT_TYPE_TEXT_NAME</see>,
+	///				and <see href="https://wiki.libsdl.org/SDL3/SDL_CAPITALIZE_NONE">SDL_CAPITALIZE_NONE</see> for e-mail addresses, usernames, and passwords.
+	///			</description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_AUTOCORRECT_BOOLEAN"><c>SDL_PROP_TEXTINPUT_AUTOCORRECT_BOOLEAN</c></see></term>
+	///			<description>true to enable auto completion and auto correction, defaults to true</description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_MULTILINE_BOOLEAN"><c>SDL_PROP_TEXTINPUT_MULTILINE_BOOLEAN</c></see></term>
+	///			<description>
+	///				true if multiple lines of text are allowed.
+	///				This defaults to true if <see href="https://wiki.libsdl.org/SDL3/SDL_HINT_RETURN_KEY_HIDES_IME">SDL_HINT_RETURN_KEY_HIDES_IME</see> is "0" or is not set,
+	///				and defaults to false if <see href="https://wiki.libsdl.org/SDL3/SDL_HINT_RETURN_KEY_HIDES_IME">SDL_HINT_RETURN_KEY_HIDES_IME</see> is "1".
+	///			</description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_TITLE_STRING"><c>SDL_PROP_TEXTINPUT_TITLE_STRING</c></see></term>
+	///			<description>A title for the top of the on-screen keyboard window, if it has one</description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_PLACEHOLDER_STRING"><c>SDL_PROP_TEXTINPUT_PLACEHOLDER_STRING</c></see></term>
+	///			<description>The placeholder shown before the user starts typing, when the field is empty</description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_DEFAULT_TEXT_STRING"><c>SDL_PROP_TEXTINPUT_DEFAULT_TEXT_STRING</c></see></term>
+	///			<description>Text to prefill the text field with</description>
+	///		</item>
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_MAX_LENGTH_NUMBER"><c>SDL_PROP_TEXTINPUT_MAX_LENGTH_NUMBER</c></see></term>
+	///			<description>Maximum length for the text field, in characters (not bytes)</description>
+	///		</item>		
+	///	</list>
+	///	On Android you can directly specify the input type:
+	///	<list type="bullet">
+	///		<item>
+	///			<term><see href="https://wiki.libsdl.org/SDL3/SDL_PROP_TEXTINPUT_ANDROID_INPUTTYPE_NUMBER"><c>SDL_PROP_TEXTINPUT_ANDROID_INPUTTYPE_NUMBER</c></see></term>
+	///			<description>
+	///				The text input type to use, overriding other properties.
+	///				This is documented at <see href="https://developer.android.com/reference/android/text/InputType"/>
+	///			</description>
+	///		</item>
+	///	</list>
+	///	</para>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_StartTextInputWithProperties">SDL_StartTextInputWithProperties</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_StartTextInputWithProperties(SDL_Window* window, uint props);
+
+	/// <summary>
+	/// Stops receiving any text input events in a window
+	/// </summary>
+	/// <param name="window">The window to disable text input</param>
+	/// <returns>Returns true on success or false on failure; call <see href="https://wiki.libsdl.org/SDL3/SDL_GetError">SDL_GetError</see>() for more information</returns>
+	/// <remarks>
+	/// <para>
+	/// If <see href="https://wiki.libsdl.org/SDL3/SDL_StartTextInput">SDL_StartTextInput</see>() showed the screen keyboard, this function will hide it.
+	/// </para>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_StopTextInput">SDL_StopTextInput</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_StopTextInput(SDL_Window* window);
+
+	/// <summary>
 	/// Blocks until any pending window state is finalized
 	/// </summary>
 	/// <param name="window">The window for which to wait for the pending state to be applied</param>
@@ -1980,6 +2168,20 @@ partial class Window
 	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_SyncWindow">SDL_SyncWindow</seealso>
 	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
 	internal unsafe static partial CBool SDL_SyncWindow(SDL_Window* window);
+
+	/// <summary>
+	/// Checks whether or not Unicode text input events are enabled for a window
+	/// </summary>
+	/// <param name="window">The window to check.</param>
+	/// <returns>Returns true if text input events are enabled else false</returns>
+	/// <remarks>
+	/// <para>
+	/// This function should only be called on the main thread.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_TextInputActive">SDL_TextInputActive</seealso>
+	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]
+	internal unsafe static partial CBool SDL_TextInputActive(SDL_Window* window);
 
 	/// <summary>
 	/// Returns whether the window has a surface associated with it

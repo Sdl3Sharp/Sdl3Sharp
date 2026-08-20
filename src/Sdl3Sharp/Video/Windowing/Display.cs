@@ -383,10 +383,10 @@ public abstract partial class Display : IFormattable, ISpanFormattable
 	}
 
 	/// <summary>
-	/// Gets the id of this display
+	/// Gets the ID of this display
 	/// </summary>
 	/// <value>
-	/// The id of this display
+	/// The ID of this display
 	/// </value>
 	/// <remarks>
 	/// <para>
@@ -394,7 +394,7 @@ public abstract partial class Display : IFormattable, ISpanFormattable
 	/// If a display is disconnected and then reconnected, it will get assigned a new <see cref="Id"/>.
 	/// </para>
 	/// <para>
-	/// An id of <c>0</c> indicates an invalid display.
+	/// An ID of <c>0</c> indicates an invalid display.
 	/// </para>
 	/// </remarks>
 	public uint Id { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mDisplayId; }
@@ -681,6 +681,15 @@ public abstract partial class Display : IFormattable, ISpanFormattable
 			return new(displayId, register: false);
 		}
 	}
+
+	/// <summary>
+	/// Tries to get an existing <see cref="Display"/> by its ID
+	/// </summary>
+	/// <param name="id">The ID of the display</param>
+	/// <param name="display">The existing <see cref="Display"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <see langword="null"/></param>
+	/// <returns><c><see langword="true"/></c>, if a display with the specified <paramref name="id"/> exists; otherwise, <c><see langword="false"/></c></returns>
+	public static bool TryGetFromId(uint id, [NotNullWhen(true)] out Display? display)
+		=> TryGetOrCreate(id, out display);
 
 	/// <summary>
 	/// Tries to get the display that contains the specified point in screen space

@@ -1,4 +1,5 @@
 ﻿using Sdl3Sharp.Events;
+using Sdl3Sharp.Input;
 using Sdl3Sharp.Internal;
 using Sdl3Sharp.Utilities;
 using Sdl3Sharp.Video.Coloring;
@@ -802,7 +803,7 @@ public abstract partial class Window : IDisposable
 	/// </para>
 	/// <para>
 	/// If you'd like to keep the mouse position fixed while in relative mode you can use the <see cref="MouseRect"/> property.
-	/// If you'd like the cursor to be at a specific location when relative mode ends, you should use <see cref="WarpMouseInWindow"/> before disabling relative mode.
+	/// If you'd like the cursor to be at a specific location when relative mode ends, you should use <see cref="Mouse.WarpInWindow(Window?, float, float)"/> before disabling relative mode.
 	/// </para>
 	/// <para>
 	/// This property should only be accessed from the main thread.
@@ -886,6 +887,54 @@ public abstract partial class Window : IDisposable
 			unsafe
 			{
 				SdlErrorHelper.ThrowIfFailed(SDL_SetWindowResizable(mWindow, value));
+			}
+		}
+	}
+
+	/// <summary>
+	/// Gets a value indicating whether the window has a screen keyboard shown
+	/// </summary>
+	/// <value>
+	/// A value indicating whether the window has a screen keyboard shown
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// This property should only be accessed from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool IsScreenKeyboardShown
+	{
+		get
+		{
+			unsafe
+			{
+				return SDL_ScreenKeyboardShown(mWindow);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Gets a value indicating whether the window has text input active
+	/// and <see cref="EventType.TextInput"/> (<see cref="TextInputEvent"/>) and <see cref="EventType.TextEditing"/> (<see cref="TextEditingEvent"/>) events are enabled for the current window
+	/// </summary>
+	/// <value>
+	/// A value indicating whether the window has text input active
+	/// and <see cref="EventType.TextInput"/> (<see cref="TextInputEvent"/>) and <see cref="EventType.TextEditing"/> (<see cref="TextEditingEvent"/>) events are enabled for the current window
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// If the value of this property is <c><see langword="true"/></c>,
+	/// the text input was previously started with <see cref="TryStartTextInput()"/> or <see cref="TryStartTextInput(TextInputType?, Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)"/>
+	/// and not yet stopped with <see cref="TryStopTextInput"/>.
+	/// </para>
+	/// </remarks>
+	public bool IsTextInputActive
+	{
+		get
+		{
+			unsafe
+			{
+				return SDL_TextInputActive(mWindow);
 			}
 		}
 	}
@@ -1590,6 +1639,47 @@ public abstract partial class Window : IDisposable
 	}
 
 	/// <summary>
+	/// Gets or sets the area of the window that is used for text input
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The <c>Rect</c> component of the value of this property is the area of the window that is used for text input, in window coordinates.
+	/// The <c>Cursor</c> component of the value of this property is offset of the current cursor location relative to the <see cref="Rect{T}.Left"/> coordinate of the <c>Rect</c> component, in window coordinates.
+	/// </para>
+	/// <para>
+	/// Native input methods may place a window with word suggestions near the cursor, without covering the text being entered.
+	/// </para>
+	/// <para>
+	/// You can reset the text input area to the default by calling <see cref="TryResetTextInputArea"/>.
+	/// </para>
+	/// <para>
+	/// This property should only be accessed from the main thread.
+	/// </para>
+	/// </remarks>
+	public (Rect<int> Rect, int Cursor) TextInputArea
+	{
+		get
+		{
+			unsafe
+			{
+				Unsafe.SkipInit(out (Rect<int> Rect, int Cursor) textInputArea);
+
+				SdlErrorHelper.ThrowIfFailed(SDL_GetTextInputArea(mWindow, &textInputArea.Rect, &textInputArea.Cursor));
+
+				return textInputArea;
+			}
+		}
+
+		set
+		{
+			unsafe
+			{
+				SdlErrorHelper.ThrowIfFailed(SDL_SetTextInputArea(mWindow, &value.Rect, value.Cursor));
+			}
+		}
+	}
+
+	/// <summary>
 	/// Gets or sets the title of the window
 	/// </summary>
 	/// <value>
@@ -1676,6 +1766,23 @@ public abstract partial class Window : IDisposable
 				SDL_DestroyWindow(mWindow);
 				mWindow = null;
 			}
+		}
+	}
+
+	/// <summary>
+	/// Tries to dismiss the composition window/IME without disabling the subsystem
+	/// </summary>
+	/// <returns><c><see langword="true"/></c>, if the composition window/IME was dismissed successfully; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+	/// <remarks>
+	/// <para>
+	/// This method should only be called from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool TryClearComposition()
+	{
+		unsafe
+		{
+			return SDL_ClearComposition(mWindow);
 		}
 	}
 
@@ -3350,7 +3457,7 @@ public abstract partial class Window : IDisposable
 	/// Tries to get an existing <see cref="Window"/> by its numeric ID
 	/// </summary>
 	/// <param name="id">The numeric ID of the window</param>
-	/// <param name="result">The existing <see cref="Window"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <see langword="null"/></param>
+	/// <param name="window">The existing <see cref="Window"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <see langword="null"/></param>
 	/// <returns><c><see langword="true"/></c>, if a window with the specified <paramref name="id"/> exists; otherwise, <c><see langword="false"/></c></returns>
 	/// <remarks>
 	/// <para>
@@ -3361,11 +3468,11 @@ public abstract partial class Window : IDisposable
 	/// This method should only be called from the main thread.
 	/// </para>
 	/// </remarks>
-	public static bool TryGetFromId(uint id, [NotNullWhen(true)] out Window? result)
+	public static bool TryGetFromId(uint id, [NotNullWhen(true)] out Window? window)
 	{
 		unsafe
 		{
-			return TryGetOrCreate(SDL_GetWindowFromID(id), out result);
+			return TryGetOrCreate(SDL_GetWindowFromID(id), out window);
 		}
 	}
 
@@ -3598,6 +3705,26 @@ public abstract partial class Window : IDisposable
 	}
 
 	/// <summary>
+	/// Tries to reset the text input area to its default position and size
+	/// </summary>
+	/// <returns><c><see langword="true"/></c>, if the text input area was successfully reset; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+	/// <remarks>
+	/// <para>
+	/// This method corresponds to the <see cref="TextInputArea"/> property, which can be used to get or set the text input area.
+	/// </para>
+	/// <para>
+	/// This method should only be called from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool TryResetTextInputArea()
+	{
+		unsafe
+		{
+			return SDL_SetTextInputArea(mWindow, rect: null, cursor: 0);
+		}
+	}
+
+	/// <summary>
 	/// Tries to restore the size and position of the previously minimized or maximized window
 	/// </summary>
 	/// <returns><c><see langword="true"/></c>, if the window was successfully restored; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
@@ -3741,6 +3868,357 @@ public abstract partial class Window : IDisposable
 		unsafe
 		{
 			return SDL_ShowWindowSystemMenu(mWindow, x, y);
+		}
+	}
+
+	/// <summary>
+	/// Tries to start accepting text input events for the current window
+	/// </summary>
+	/// <returns><c><see langword="true"/></c>, if text input events were successfully started; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+	/// <remarks>
+	/// <para>
+	/// Use this method to enable text input for the current window.
+	/// If this method returns <c><see langword="true"/></c>, SDL will start sending <see cref="EventType.TextInput"/> (<see cref="TextInputEvent"/>) and <see cref="EventType.TextEditing"/> (<see cref="TextEditingEvent"/>) events for this window.
+	/// Text input events are not received by default.
+	/// </para>
+	/// <para>
+	/// Always pair a call to this method with a later call to <see cref="TryStopTextInput"/> to stop receiving text input events when they are no longer needed.
+	/// </para>
+	/// <para>
+	/// On some platforms using this function shows the screen keyboard and/or activates an IME, which can prevent some key press events from being passed through.
+	/// </para>
+	/// <para>
+	/// This method should only be called from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool TryStartTextInput()
+	{
+		unsafe
+		{
+			return SDL_StartTextInput(mWindow);
+		}
+	}
+
+	/// <summary>
+	/// Tries to start accepting text input events for the current window
+	/// </summary>
+	/// <param name="type">
+	/// A <see cref="TextInputType"/> describing the type of text to be inputted.
+	/// If not specified, defaults to <see cref="TextInputType.Text"/>.
+	/// </param>
+	/// <param name="capitalization">
+	/// A <see cref="Capitalization"/> describing how the text to be inputted should be capitalized
+	/// If not specified, defaults to <see cref="Capitalization.Sentences"/> if <paramref name="type"/> is set to <see cref="TextInputType.Text"/>,
+	/// <see cref="Capitalization.Words"/> if <paramref name="type"/> is set to <see cref="TextInputType.TextName"/>,
+	/// or <see cref="Capitalization.None"/> otherwise.
+	/// </param>
+	/// <param name="autocorrect">
+	/// A value indicating whether the text input should use auto-completion and auto-correction features.
+	/// If not specified, defaults to <c><see langword="true"/></c>, i.e., the text input will use auto-completion and auto-correction features.
+	/// </param>
+	/// <param name="multiline">
+	/// A value indicating whether the text input should allow multiple lines of text to be inputted.
+	/// If not specified, defaults to value depending on the value of the <see cref="Hint.ReturnKeyHidesIme"/> hint:
+	/// <list type="bullet">
+	///		<item>
+	///			<term>
+	///				<see cref="Hint.ReturnKeyHidesIme"/> set to <c>"0"</c>
+	///			</term>
+	///			<description>
+	///				<c><see langword="true"/></c>, i.e., multiline text input is allowed
+	///			</description>
+	///		</item>
+	///		<item>
+	///			<term>
+	///				<see cref="Hint.ReturnKeyHidesIme"/> set to <c>"1"</c>
+	///			</term>
+	///			<description>
+	///				<c><see langword="false"/></c>, i.e., multiline text input is not allowed
+	///			</description>
+	///		</item>
+	///		<item>
+	///			<term>
+	///				<see cref="Hint.ReturnKeyHidesIme"/> is not set
+	///			</term>
+	///			<description>
+	///				<c><see langword="true"/></c>, i.e., multiline text input is allowed (the same behavior as if <see cref="Hint.ReturnKeyHidesIme"/> was set to <c>"0"</c>)
+	///			</description>
+	///		</item>
+	///	</list>
+	/// </param>
+	/// <param name="title">A title to be used at the top of the on-screen keyboard, if applicable</param>
+	/// <param name="placeholder">A placeholder text to be shown in the text input when it's empty</param>
+	/// <param name="defaultText">A text to be pre-filled in the text input when it starts</param>
+	/// <param name="maxLength">
+	/// The maximum number of characters that can be inputted into the text input.
+	/// Note that the value of this parameter is measured in characters, not bytes.
+	/// </param>
+	/// <param name="properties">Additional properties to be used for the text input</param>
+	/// <returns><c><see langword="true"/></c>, if text input events were successfully started; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+	/// <remarks>
+	/// <para>
+	/// Use this method to enable text input for the current window.
+	/// If this method returns <c><see langword="true"/></c>, SDL will start sending <see cref="EventType.TextInput"/> (<see cref="TextInputEvent"/>) and <see cref="EventType.TextEditing"/> (<see cref="TextEditingEvent"/>) events.
+	/// Text input events are not received by default.
+	/// </para>
+	/// <para>
+	/// Always pair a call to this method with a later call to <see cref="TryStopTextInput"/> to stop receiving text input events when they are no longer needed.
+	/// </para>
+	/// <para>
+	/// On some platforms using this function shows the screen keyboard and/or activates an IME, which can prevent some key press events from being passed through.
+	/// </para>
+	/// <para>
+	/// This method should only be called from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool TryStartTextInput(TextInputType? type = default, Capitalization? capitalization = default, bool? autocorrect = default, bool? multiline = default, string? title = default, string? placeholder = default, string? defaultText = default, int? maxLength = default, Properties? properties = default)
+	{
+		unsafe
+		{
+			Properties propertiesUsed;
+			Unsafe.SkipInit(out TextInputType? typeBackup);
+			Unsafe.SkipInit(out Capitalization? capitalizationBackup);
+			Unsafe.SkipInit(out bool? autocorrectBackup);
+			Unsafe.SkipInit(out bool? multilineBackup);
+			Unsafe.SkipInit(out string? titleBackup);
+			Unsafe.SkipInit(out string? placeholderBackup);
+			Unsafe.SkipInit(out string? defaultTextBackup);
+			Unsafe.SkipInit(out int? maxLengthBackup);
+
+			if (properties is null)
+			{
+				propertiesUsed = [];
+
+				if (type is TextInputType typeValue)
+				{
+					propertiesUsed.TrySetNumberValue(PropertyNames.TextInputTypeNumber, unchecked((int)typeValue));
+				}
+
+				if (capitalization is Capitalization capitalizationValue)
+				{
+					propertiesUsed.TrySetNumberValue(PropertyNames.TextInputCapitalizationNumber, unchecked((int)capitalizationValue));
+				}
+
+				if (autocorrect is bool autocorrectValue)
+				{
+					propertiesUsed.TrySetBooleanValue(PropertyNames.TextInputAutocorrectBoolean, autocorrectValue);
+				}
+
+				if (multiline is bool multilineValue)
+				{
+					propertiesUsed.TrySetBooleanValue(PropertyNames.TextInputMultilineBoolean, multilineValue);
+				}
+
+				if (title is not null)
+				{
+					propertiesUsed.TrySetStringValue(PropertyNames.TextInputTitleString, title);
+				}
+
+				if (placeholder is not null)
+				{
+					propertiesUsed.TrySetStringValue(PropertyNames.TextInputPlaceholderString, placeholder);
+				}
+
+				if (defaultText is not null)
+				{
+					propertiesUsed.TrySetStringValue(PropertyNames.TextInputDefaultTextString, defaultText);
+				}
+
+				if (maxLength is int maxLengthValue)
+				{
+					propertiesUsed.TrySetNumberValue(PropertyNames.TextInputMaxLengthNumber, maxLengthValue);
+				}
+			}
+			else
+			{
+				propertiesUsed = properties;
+
+				if (type is TextInputType typeValue)
+				{
+					typeBackup = propertiesUsed.TryGetNumberValue(PropertyNames.TextInputTypeNumber, out var existingTypeValue)
+						? unchecked((TextInputType)existingTypeValue)
+						: null;
+
+					propertiesUsed.TrySetNumberValue(PropertyNames.TextInputTypeNumber, unchecked((int)typeValue));
+				}
+
+				if (capitalization is Capitalization capitalizationValue)
+				{
+					capitalizationBackup = propertiesUsed.TryGetNumberValue(PropertyNames.TextInputCapitalizationNumber, out var existingCapitalizationValue)
+						? unchecked((Capitalization)existingCapitalizationValue)
+						: null;
+
+					propertiesUsed.TrySetNumberValue(PropertyNames.TextInputCapitalizationNumber, unchecked((int)capitalizationValue));
+				}
+
+				if (autocorrect is bool autocorrectValue)
+				{
+					autocorrectBackup = propertiesUsed.TryGetBooleanValue(PropertyNames.TextInputAutocorrectBoolean, out var existingAutocorrectValue)
+						? existingAutocorrectValue
+						: null;
+
+					propertiesUsed.TrySetBooleanValue(PropertyNames.TextInputAutocorrectBoolean, autocorrectValue);
+				}
+
+				if (multiline is bool multilineValue)
+				{
+					multilineBackup = propertiesUsed.TryGetBooleanValue(PropertyNames.TextInputMultilineBoolean, out var existingMultilineValue)
+						? existingMultilineValue
+						: null;
+
+					propertiesUsed.TrySetBooleanValue(PropertyNames.TextInputMultilineBoolean, multilineValue);
+				}
+
+				if (title is not null)
+				{
+					titleBackup = propertiesUsed.TryGetStringValue(PropertyNames.TextInputTitleString, out var existingTitle)
+						? existingTitle
+						: null;
+
+					propertiesUsed.TrySetStringValue(PropertyNames.TextInputTitleString, title);
+				}
+
+				if (placeholder is not null)
+				{
+					placeholderBackup = propertiesUsed.TryGetStringValue(PropertyNames.TextInputPlaceholderString, out var existingPlaceholder)
+						? existingPlaceholder
+						: null;
+
+					propertiesUsed.TrySetStringValue(PropertyNames.TextInputPlaceholderString, placeholder);
+				}
+
+				if (defaultText is not null)
+				{
+					defaultTextBackup = propertiesUsed.TryGetStringValue(PropertyNames.TextInputDefaultTextString, out var existingDefaultText)
+						? existingDefaultText
+						: null;
+
+					propertiesUsed.TrySetStringValue(PropertyNames.TextInputDefaultTextString, defaultText);
+				}
+
+				if (maxLength is int maxLengthValue)
+				{
+					maxLengthBackup = propertiesUsed.TryGetNumberValue(PropertyNames.TextInputMaxLengthNumber, out var existingMaxLengthValue)
+						? unchecked((int)existingMaxLengthValue)
+						: null;
+
+					propertiesUsed.TrySetNumberValue(PropertyNames.TextInputMaxLengthNumber, maxLengthValue);
+				}
+			}
+
+			try
+			{
+				return SDL_StartTextInputWithProperties(mWindow, propertiesUsed.Id);
+			}
+			finally
+			{
+				if (properties is null)
+				{
+					// propertiesUsed was just a temporary instance we created for this call, so we need to dispose it now
+
+					propertiesUsed.Dispose();
+				}
+				else
+				{
+					// we restored the original properties values from the given properties instance
+
+					if (typeBackup is TextInputType typeValue)
+					{
+						propertiesUsed.TrySetNumberValue(PropertyNames.TextInputTypeNumber, unchecked((int)typeValue));
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputTypeNumber);
+					}
+
+					if (capitalizationBackup is Capitalization capitalizationValue)
+					{
+						propertiesUsed.TrySetNumberValue(PropertyNames.TextInputCapitalizationNumber, unchecked((int)capitalizationValue));
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputCapitalizationNumber);
+					}
+
+					if (autocorrectBackup is bool autocorrectValue)
+					{
+						propertiesUsed.TrySetBooleanValue(PropertyNames.TextInputAutocorrectBoolean, autocorrectValue);
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputAutocorrectBoolean);
+					}
+
+					if (multilineBackup is bool multilineValue)
+					{
+						propertiesUsed.TrySetBooleanValue(PropertyNames.TextInputMultilineBoolean, multilineValue);
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputMultilineBoolean);
+					}
+
+					if (titleBackup is string titleValue)
+					{
+						propertiesUsed.TrySetStringValue(PropertyNames.TextInputTitleString, titleValue);
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputTitleString);
+					}
+
+					if (placeholderBackup is string placeholderValue)
+					{
+						propertiesUsed.TrySetStringValue(PropertyNames.TextInputPlaceholderString, placeholderValue);
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputPlaceholderString);
+					}
+
+					if (defaultTextBackup is string defaultTextValue)
+					{
+						propertiesUsed.TrySetStringValue(PropertyNames.TextInputDefaultTextString, defaultTextValue);
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputDefaultTextString);
+					}
+
+					if (maxLengthBackup is int maxLengthValue)
+					{
+						propertiesUsed.TrySetNumberValue(PropertyNames.TextInputMaxLengthNumber, maxLengthValue);
+					}
+					else
+					{
+						propertiesUsed.TryRemove(PropertyNames.TextInputMaxLengthNumber);
+					}
+				}
+			}
+		}
+	}
+
+	/// <summary>
+	/// Tries to stop accepting text input events for the current window
+	/// </summary>
+	/// <returns><c><see langword="true"/></c>, if text input was successfully stopped; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+	/// <remarks>
+	/// <para>
+	/// Use this method to disable text input for the current window that was previously enabled via <see cref="TryStartTextInput()"/> or <see cref="TryStartTextInput(TextInputType?, Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)"/>.
+	/// <see cref="EventType.TextInput"/> (<see cref="TextInputEvent"/>) and <see cref="EventType.TextEditing"/> (<see cref="TextEditingEvent"/>) events for this window will no longer be sent by SDL.
+	/// </para>
+	/// <para>
+	/// If the previous method of enabling text input has shown the screen keyboard, this method will hide it again.
+	/// </para>
+	/// <para>
+	/// This method should only be called from the main thread.
+	/// </para>
+	/// </remarks>
+	public bool TryStopTextInput()
+	{
+		unsafe
+		{
+			return SDL_StopTextInput(mWindow);
 		}
 	}
 

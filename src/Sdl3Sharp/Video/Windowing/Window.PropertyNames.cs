@@ -1,4 +1,5 @@
 ﻿using Sdl3Sharp.Events;
+using Sdl3Sharp.Input;
 using Sdl3Sharp.Video.Coloring;
 
 namespace Sdl3Sharp.Video.Windowing;
@@ -264,6 +265,108 @@ partial class Window
 		/// </para>
 		/// </remarks>
 		public const string HdrHeadroomFloat = "SDL.window.HDR_headroom";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a <see cref="TextInputType"/> describing the type of text to be inputted
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// If not specified, the type of text to be inputted will default to <see cref="TextInputType.Text"/>.
+		/// </para>
+		/// </remarks>
+		public const string TextInputTypeNumber = "SDL.textinput.type";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a <see cref="Capitalization"/> describing how the text to be inputted should be capitalized
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// If not specified, the capitalization of the text to be inputted will default to
+		/// <see cref="Capitalization.Sentences"/> if the type of text is <see cref="TextInputType.Text"/>,
+		/// <see cref="Capitalization.Words"/> if the type of text is <see cref="TextInputType.TextName"/>,
+		/// or <see cref="Capitalization.None"/> for any other type of text.
+		/// </para>
+		/// </remarks>
+		public const string TextInputCapitalizationNumber = "SDL.textinput.capitalization";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a value indicating whether the text input should use auto-completion and auto-correction features
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// If not specified, the text input will default to using auto-completion and auto-correction features.
+		/// </para>
+		/// </remarks>
+		public const string TextInputAutocorrectBoolean = "SDL.textinput.autocorrect";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a value indicating whether the text input should allow multiple lines of text to be inputted
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// If not specified, the text input's default will depend on the value of the <see cref="Hint.ReturnKeyHidesIme"/> hint:
+		/// <list type="bullet">
+		///		<item>
+		///			<term>
+		///				<see cref="Hint.ReturnKeyHidesIme"/> set to <c>"0"</c>
+		///			</term>
+		///			<description>
+		///				Multiline text input is allowed
+		///			</description>
+		///		</item>
+		///		<item>
+		///			<term>
+		///				<see cref="Hint.ReturnKeyHidesIme"/> set to <c>"1"</c>
+		///			</term>
+		///			<description>
+		///				Multiline text input is not allowed
+		///			</description>
+		///		</item>
+		///		<item>
+		///			<term>
+		///				<see cref="Hint.ReturnKeyHidesIme"/> is not set
+		///			</term>
+		///			<description>
+		///				Multiline text input is allowed (the same behavior as if <see cref="Hint.ReturnKeyHidesIme"/> was set to <c>"0"</c>)
+		///			</description>
+		///		</item>
+		///	</list>
+		/// </para>
+		/// </remarks>
+		public const string TextInputMultilineBoolean = "SDL.textinput.multiline";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a title to be used at the top of the on-screen keyboard, if applicable
+		/// </summary>
+		public const string TextInputTitleString = "SDL.textinput.title";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a placeholder text to be shown in the text input when it's empty
+		/// </summary>
+		public const string TextInputPlaceholderString = "SDL.textinput.placeholder";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds a text to be pre-filled in the text input when it starts
+		/// </summary>
+		public const string TextInputDefaultTextString = "SDL.textinput.default_text";
+
+		/// <summary>
+		/// The name of a <see cref="TryStartTextInput(Input.TextInputType?, Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)">property used when starting text input</see>
+		/// that holds the maximum number of characters that can be inputted into the text input
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Note that the value of the associated property is measured in characters, not bytes.
+		/// </para>
+		/// </remarks>
+		public const string TextInputMaxLengthNumber = "SDL.textinput.max_length";
 
 		private protected PropertyNames() { }
 	}

@@ -3965,5 +3965,35 @@ partial struct Hint
 	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_HINT_MAIN_CALLBACK_RATE">SDL_HINT_MAIN_CALLBACK_RATE</seealso>
 	public static Hint MainCallbackRate { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new("SDL_MAIN_CALLBACK_RATE"); }
 
+	/// <summary>
+	/// Gets a hint to control whether the return key on the soft keyboard should hide the soft keyboard on Android and iOS
+	/// </summary>
+	/// <value>
+	/// A hint to control whether the return key on the soft keyboard should hide the soft keyboard on Android and iOS
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The value of this hint controls the default value of the <c>multiline</c> argument in a call to <see cref="Window.TryStartTextInput(TextInputType?, Capitalization?, bool?, bool?, string?, string?, string?, int?, Properties?)"/>.
+	/// </para>
+	/// <para>
+	/// The hint can be set to the following values:
+	/// <list type="bullet">
+	///		<item>
+	///			<term><c>"0"</c></term>
+	///			<description>The return key will be handled as a key event (default)</description>
+	///		</item>
+	///		<item>
+	///			<term><c>"1"</c></term>
+	///			<description>The return key will hide the keyboard</description>
+	///		</item>
+	/// </list>
+	/// </para>
+	/// <para>
+	/// This hint can be set anytime.
+	/// </para>
+	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_HINT_RETURN_KEY_HIDES_IME">SDL_HINT_RETURN_KEY_HIDES_IME</seealso>
+	public static Hint ReturnKeyHidesIme { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new("SDL_RETURN_KEY_HIDES_IME"); }
+
 	// TODO
 }
