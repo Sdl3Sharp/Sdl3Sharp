@@ -1,4 +1,5 @@
-﻿using Sdl3Sharp.Internal;
+﻿using Sdl3Sharp.Input;
+using Sdl3Sharp.Internal;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -8,27 +9,12 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal GamepadAxisEvent GAxis;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="GamepadAxisEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="GamepadAxisEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in GamepadAxisEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> GAxis = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a gamepad axis changes position
+/// Represents an event that occurs when a gamepad axis changes
 /// </summary>
 /// <remarks>
 /// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.GamepadAxisMotion"/></description></item>
 /// </list>
@@ -36,19 +22,10 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct GamepadAxisEvent : ICommonEvent<GamepadAxisEvent>, IFormattable, ISpanFormattable
+public partial struct GamepadAxisEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.GamepadAxisMotion;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<GamepadAxisEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref GamepadAxisEvent ICommonEvent<GamepadAxisEvent>.GetReference(ref Event @event) => ref @event.GAxis;
 
 	private CommonEvent mCommon;
 	private uint mWhich;
@@ -57,31 +34,25 @@ public struct GamepadAxisEvent : ICommonEvent<GamepadAxisEvent>, IFormattable, I
 	private short mValue;
 	private readonly ushort mPadding4;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.GamepadAxisMotion"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.GamepadAxisMotion"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="GamepadAxisEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(GamepadAxisEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(GamepadAxisEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -93,34 +64,39 @@ public struct GamepadAxisEvent : ICommonEvent<GamepadAxisEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the joystick device ID for the <see cref="Gamepad"/> associated with the event
+	/// Gets or sets the <see cref="Joystick.Id">ID</see> of the <see cref="Input.Gamepad"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The joystick device ID for the <see cref="Gamepad"/> associated with the event
+	/// The <see cref="Joystick.Id">ID</see> of the <see cref="Input.Gamepad"/> associated with this event
 	/// </value>
-	public uint JoystickId
+	public uint GamepadId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
 
+	// TODO: Add a `Gamepad` property once the `Gamepad` type is implemented
+	// Important note: `Gamepad`s are also `Joystick`s, but not all `Joystick`s are `Gamepad`s. This suggests that `Gamepad` should be a subclass of `Joystick`.
+	// Also, this implies that `Gamepad` also use `Joystick` IDs, which is also what SDL does.
+
 	/// <summary>
-	/// Gets or sets the axis index for the gamepad axis that changed
+	/// Gets or sets the gamepad axis that changed
 	/// </summary>
 	/// <value>
-	/// The axis index for the gamepad axis that changed
+	/// The gamepad axis that changed
 	/// </value>
-	public byte Axis
+	public GamepadAxis Axis
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mAxis;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mAxis = value;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => unchecked((GamepadAxis)mAxis);
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mAxis = unchecked((byte)value);
 	}
 
 	/// <summary>
-	/// Gets or sets the value for the axis that changed
+	/// Gets or sets the value for the <see cref="Axis"/> that changed
 	/// </summary>
 	/// <value>
-	/// The value for the axis that changed, in the range from <see cref="short.MinValue"/> to <see cref="short.MaxValue"/>
+	/// The value for the <see cref="Axis"/> that changed, in the range from <c><see cref="short.MinValue"/></c> to <c><see cref="short.MaxValue"/></c> and centered within around <c>8000</c> of <c>0</c> for thumbsticks,
+	/// and in the range from <c>0</c> to <c><see cref="short.MaxValue"/></c> for triggers (note that this is not the same range that the corresponding joystick axis would have)
 	/// </value>
 	public short Value
 	{
@@ -139,25 +115,10 @@ public struct GamepadAxisEvent : ICommonEvent<GamepadAxisEvent>, IFormattable, I
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(JoystickId)}: ")
-							   .Append(JoystickId.ToString(format, formatProvider))
-							   .Append($", {nameof(Axis)}: ")
-							   .Append(Axis.ToString(format, formatProvider))
-							   .Append($", {nameof(Value)}: ")
-							   .Append(Value.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(GamepadId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(Axis)}: {unchecked((GamepadAxis)mAxis)}, {
+			nameof(Value)}: {mValue.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -165,40 +126,13 @@ public struct GamepadAxisEvent : ICommonEvent<GamepadAxisEvent>, IFormattable, I
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
-			&& SpanFormat.TryWrite($", {nameof(JoystickId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(JoystickId, ref destination, ref charsWritten, format, provider)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite($", {nameof(GamepadId)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Axis)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Axis, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(unchecked((GamepadAxis)mAxis), ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(Value)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Value, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mValue, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in GamepadAxisEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.GamepadAxisMotion"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.GamepadAxisMotion"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator GamepadAxisEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotGamepadAxisEvent();
-		}
-
-		return @event.GAxis;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotGamepadAxisEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(GamepadAxisEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

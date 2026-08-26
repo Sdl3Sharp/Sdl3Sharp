@@ -8,89 +8,58 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal GamepadDeviceEvent GDevice;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="GamepadDeviceEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="GamepadDeviceEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in GamepadDeviceEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> GDevice = @event;
-
-
-}
-
 /// <summary>
-/// Represents an event that occurs when a <see cref="Gamepad">gamepad device</see> is being <see cref="EventType.GamepadAdded">added</see> into the system, <see cref="EventType.GamepadRemoved">removed</see> from the system, <see cref="EventType.GamepadRemapped">remapped</see>, or <see cref="EventType.GamepadUpdateCompleted">updated</see> or that gets it's <see cref="EventType.GamepadSteamHandleUpdated">Steam handle updated</see>
+/// Represents an event that occurs when a <see cref="Input.Gamepad"/> device is added or removed, when a <see cref="Input.Gamepad"/> device is remapped,
+/// when a <see cref="Input.Gamepad"/> update is completed, or when a <see cref="Input.Gamepad"/>'s Steam handle is updated
 /// </summary>
 /// <remarks>
-/// <para>
-/// Joysticks that are supported gamepads receive both, a <see cref="JoyDeviceEvent"/> and a <see cref="GamepadDeviceEvent"/>.
-/// </para>
-/// <para>
-/// SDL will send a <see cref="GamepadDeviceEvent"/> with <see cref="Type"/> <see cref="EventType.GamepadAdded"/> for every gamepad device it discovers during initialization.
-/// After that, <see cref="GamepadDeviceEvent"/>s with <see cref="Type"/> <see cref="EventType.GamepadAdded"/> will only arrive when a gamepad device is hotplugged or a <see cref="Joystick">joystick device</see> gets a <see cref="Gamepad">gamepad</see> mapping during the application's runtime.
-/// </para>
 /// <para>
 /// Associated <see cref="EventType"/>s:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.GamepadAdded"/></description></item>
-/// <item><description><see cref="EventType.GamepadRemoved"/></description></item>
+/// <item><description><see cref="EventType.GamepadRemoved"/></description></item>/// 
 /// <item><description><see cref="EventType.GamepadRemapped"/></description></item>
 /// <item><description><see cref="EventType.GamepadUpdateCompleted"/></description></item>
 /// <item><description><see cref="EventType.GamepadSteamHandleUpdated"/></description></item>
 /// </list>
 /// </para>
+/// <para>
+/// SDL will send <see cref="EventType.JoystickAdded"/> (<see cref="JoyDeviceEvent"/>) as well as <see cref="EventType.GamepadAdded"/> (<see cref="GamepadDeviceEvent"/>) for all joystick devices that are recognized as gamepads.
+/// </para>
+/// <para>
+/// SDL will send <see cref="EventType.GamepadAdded"/> (<see cref="GamepadDeviceEvent"/>) events for joystick devices recognized as gamepads that are already connected when <see cref="Sdl(Sdl3Sharp.Sdl.BuildAction?)">SDL is initialized</see>.
+/// It will also send <see cref="EventType.GamepadAdded"/> (<see cref="GamepadDeviceEvent"/>) events for joystick devices that get gamepad mappings at runtime.
+/// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct GamepadDeviceEvent : ICommonEvent<GamepadDeviceEvent>, IFormattable, ISpanFormattable
+public partial struct GamepadDeviceEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is (>= EventType.GamepadAdded and <= EventType.GamepadRemapped) or EventType.GamepadUpdateCompleted or EventType.GamepadSteamHandleUpdated;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<GamepadDeviceEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref GamepadDeviceEvent ICommonEvent<GamepadDeviceEvent>.GetReference(ref Event @event) => ref @event.GDevice;
-
 	private CommonEvent mCommon;
 	private uint mWhich;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.GamepadAdded"/>, <see cref="EventType.GamepadRemoved"/>, <see cref="EventType.GamepadRemapped"/>, <see cref="EventType.GamepadUpdateCompleted"/>, or <see cref="EventType.GamepadSteamHandleUpdated"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.GamepadAdded"/>, <see cref="EventType.GamepadRemoved"/>, <see cref="EventType.GamepadRemapped"/>, <see cref="EventType.GamepadUpdateCompleted"/>, nor <see cref="EventType.GamepadSteamHandleUpdated"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="GamepadDeviceEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(GamepadDeviceEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(GamepadDeviceEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -102,16 +71,20 @@ public struct GamepadDeviceEvent : ICommonEvent<GamepadDeviceEvent>, IFormattabl
 	}
 
 	/// <summary>
-	/// Gets or sets the joystick device ID for the <see cref="Gamepad"/> being <see cref="EventType.GamepadAdded">added</see>, <see cref="EventType.GamepadRemoved">removed</see>, <see cref="EventType.GamepadRemapped">remapped</see>, or <see cref="EventType.GamepadUpdateCompleted">updated</see> or that gets it's <see cref="EventType.GamepadSteamHandleUpdated">Steam handle updated</see>
+	/// Gets or sets the <see cref="Joystick.Id">ID</see> of the <see cref="Input.Gamepad"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The joystick device ID for the <see cref="Gamepad"/> being <see cref="EventType.GamepadAdded">added</see>, <see cref="EventType.GamepadRemoved">removed</see>, <see cref="EventType.GamepadRemapped">remapped</see>, or <see cref="EventType.GamepadUpdateCompleted">updated</see> or that gets it's <see cref="EventType.GamepadSteamHandleUpdated">Steam handle updated</see>
+	/// The <see cref="Joystick.Id">ID</see> of the <see cref="Input.Gamepad"/> associated with this event
 	/// </value>
-	public uint JoystickId
+	public uint GamepadId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
+
+	// TODO: Add a `Gamepad` property once the `Gamepad` type is implemented
+	// Important note: `Gamepad`s are also `Joystick`s, but not all `Joystick`s are `Gamepad`s. This suggests that `Gamepad` should be a subclass of `Joystick`.
+	// Also, this implies that `Gamepad` also use `Joystick` IDs, which is also what SDL does.
 
 	/// <inheritdoc/>
 	public readonly override string ToString() => ToString(format: default, formatProvider: default);
@@ -124,21 +97,7 @@ public struct GamepadDeviceEvent : ICommonEvent<GamepadDeviceEvent>, IFormattabl
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {JoystickId}: ")
-							   .Append(JoystickId.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {nameof(GamepadId)}: {mWhich.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -146,36 +105,9 @@ public struct GamepadDeviceEvent : ICommonEvent<GamepadDeviceEvent>, IFormattabl
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
-			&& SpanFormat.TryWrite($", {nameof(JoystickId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(JoystickId, ref destination, ref charsWritten, format, provider)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite($", {nameof(GamepadId)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in GamepadDeviceEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.GamepadAdded"/>, <see cref="EventType.GamepadRemoved"/>, <see cref="EventType.GamepadRemapped"/>, <see cref="EventType.GamepadUpdateCompleted"/>, or <see cref="EventType.GamepadSteamHandleUpdated"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.GamepadAdded"/>, <see cref="EventType.GamepadRemoved"/>, <see cref="EventType.GamepadRemapped"/>, <see cref="EventType.GamepadUpdateCompleted"/>, nor <see cref="EventType.GamepadSteamHandleUpdated"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator GamepadDeviceEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotGamepadDeviceEvent();
-		}
-
-		return @event.GDevice;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotGamepadDeviceEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(GamepadDeviceEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

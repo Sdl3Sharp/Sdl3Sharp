@@ -10,7 +10,7 @@ public static partial class EventTypeExtensions
 	extension(EventType)
 	{
 		/// <summary>
-		/// Tries to register a new used defined event
+		/// Tries to register a new user-defined event type
 		/// </summary>
 		/// <param name="eventType">The newly registered <see cref="EventType"/> when this method returns <c><see langword="true"/></c></param>
 		/// <returns><c><see langword="true"/></c> if the user defined event was successfully registered; otherwise, <c><see langword="false"/></c></returns>
@@ -22,7 +22,7 @@ public static partial class EventTypeExtensions
 		}
 
 		/// <summary>
-		/// Tries to register new user defined events
+		/// Tries to register new user-defined event types
 		/// </summary>
 		/// <param name="eventTypes">A <see cref="Span{T}"/> where the newly registered <see cref="EventType"/>s should be written to. It's <see cref="Span{T}.Length"/> determines how many user defined <see cref="EventType"/>s to register.</param>
 		/// <returns><c><see langword="true"/></c> if the requested amount (by <see cref="Span{T}.Length"/>) of user defined events was successfully registered; otherwise, <c><see langword="false"/></c> (most likely there weren't enough free user defined <see cref="EventType"/>s left to register <see cref="Span{T}.Length"/> of them)</returns>
@@ -68,27 +68,6 @@ public static partial class EventTypeExtensions
 		{
 			get => SDL_EventEnabled(eventType);
 			set => SDL_SetEventEnabled(eventType, value);
-		}
-
-		/// <summary>
-		/// Tries to get the user value used to identify this user event type
-		/// </summary>
-		/// <param name="userValue">The user value used to identify this user event type</param>
-		/// <returns><c><see langword="true"/></c> if this <see cref="EventType"/> represents a user event type and <paramref name="userValue"/> is the user value which identifies it; otherwise, <c><see langword="false"/></c></returns>
-		public bool TryGetUserValue(out int userValue)
-		{
-#pragma warning disable CS0618 // Here's one of the few places we're allowed to use this (internally)
-			if (eventType is >= EventType.User and <= EventType.Last)
-			{
-				userValue = unchecked((int)(eventType - EventType.User));
-
-				return true;
-			}
-
-			userValue = default;
-
-			return false;
-#pragma warning restore CS0618
 		}
 	}
 }

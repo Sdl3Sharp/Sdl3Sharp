@@ -1,4 +1,6 @@
-﻿using Sdl3Sharp.Internal;
+﻿using Sdl3Sharp.Input;
+using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -8,38 +10,10 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal PenProximityEvent PProximity;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="PenProximityEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="PenProximityEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in PenProximityEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> PProximity = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a <see cref="Pen">pen</see> <see cref="EventType.PenProximityIn">enters</see> or <see cref="EventType.PenProximityOut">leaves</see> proximity
+/// Represents an event that occurs when a <see cref="Input.Pen"/> enters or leaves proximity of the system (e.g., it's close enough to surface to be detected, but not touching it)
 /// </summary>
 /// <remarks>
-/// <para>
-/// When a pen becomes visible to the system (it is close enough to a tablet, etc), SDL will send a <see cref="EventType.PenProximityIn"/> event with the new pen's ID.
-/// This ID is valid until the pen leaves proximity again (has been removed from the tablet's area, the tablet has been unplugged, etc).
-/// If the same pen reenters proximity again, it will be given a new ID.
-/// </para>
-/// <para>
-/// Note that "proximity" means "close enough for the tablet to know the tool is there."
-/// The pen touching and lifting off from the tablet while not leaving the area are handled by <see cref="EventType.PenDown"/> and <see cref="EventType.PenUp"/> events (<see cref="PenTouchEvent"/>).
-/// </para>
-/// <para>
-/// Notice that not all platforms have a window associated with the pen during proximity events.
-/// Some wait until <see cref="PenMotionEvent">motion</see>/<see cref="PenButtonEvent">button</see>/etc. events to offer this info.
-/// </para>
 /// <para>
 /// Associated <see cref="EventType"/>s:
 /// <list type="bullet">
@@ -47,52 +21,53 @@ partial struct Event
 /// <item><description><see cref="EventType.PenProximityOut"/></description></item>
 /// </list>
 /// </para>
+/// <para>
+/// When a <see cref="Input.Pen"/> becomes visible to the system, SDL will send a <see cref="EventType.PenProximityIn"/> (<see cref="PenProximityEvent"/>) event with the new pen's <see cref="Pen.Id">ID</see>.
+/// This ID is valid until the <see cref="Input.Pen"/> leaves proximity again, and SDL will send a <see cref="EventType.PenProximityOut"/> (<see cref="PenProximityEvent"/>) event with the same <see cref="Pen.Id">ID</see> when that happens.
+/// After that, if the same <see cref="Input.Pen"/> reenters proximity again, it will be given a new <see cref="Pen.Id">ID</see>.
+/// </para>
+/// <para>
+/// Note that "proximity" means "close enough for the system to know the tool is there".
+/// The pen touching and lifting off from the surface while not leaving the proximity area are handled by <see cref="EventType.PenDown"/> and <see cref="EventType.PenUp"/> (<see cref="PenTouchEvent"/>) events.
+/// </para>
+/// <para>
+/// Not all platforms have a <see cref="Window"/> associated with the pen during proximity events.
+/// Some platforms will wait until motion events, button events, etc. to occur before they offer this information.
+/// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct PenProximityEvent : ICommonEvent<PenProximityEvent>, IFormattable, ISpanFormattable
+public partial struct PenProximityEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.PenProximityIn or EventType.PenProximityOut;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<PenProximityEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref PenProximityEvent ICommonEvent<PenProximityEvent>.GetReference(ref Event @event) => ref @event.PProximity;
-
 	private CommonEvent mCommon;
 	private uint mWindowID;
 	private uint mWhich;
+#if SDL3_4_16_OR_GREATER
+	private PenInputFlags mPenState;
+#endif
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.PenProximityIn"/> or <see cref="EventType.PenProximityOut"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.PenProximityIn"/> nor <see cref="EventType.PenProximityOut"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="PenProximityEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(PenProximityEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(PenProximityEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -104,11 +79,16 @@ public struct PenProximityEvent : ICommonEvent<PenProximityEvent>, IFormattable,
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with pen focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with pen focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="PenProximityEvent"/> is most likely the window that currently has pen focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
@@ -116,21 +96,56 @@ public struct PenProximityEvent : ICommonEvent<PenProximityEvent>, IFormattable,
 	}
 
 	/// <summary>
-	/// Gets or sets the pen instance ID for the <see cref="Pen"/> associated with the event
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The pen instance ID for the <see cref="Pen"/> associated with the event
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
 	/// </value>
 	/// <remarks>
-	/// <value>
-	/// If a pen leaves proximity and later re-enters proximity, it may be assigned a different device ID.
-	/// </value>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="PenProximityEvent"/> is most likely the window that currently has pen focus, if any.
+	/// </para>
 	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Pen.Id">ID</see> of the <see cref="Input.Pen"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Pen.Id">ID</see> of the <see cref="Input.Pen"/> associated with this event
+	/// </value>
 	public uint PenId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
+
+	// TODO: Add a `Pen` property once the `Pen` type is implemented
+
+#if SDL3_4_16_OR_GREATER
+
+	/// <summary>
+	/// Gets or sets the state of the <see cref="Pen"/> at the time of this event
+	/// </summary>
+	/// <value>
+	/// The state of the <see cref="Pen"/> at the time of this event
+	/// </value>
+	public PenInputFlags PenState
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mPenState;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mPenState = value;
+	}
+
+#endif
 
 	/// <inheritdoc/>
 	public readonly override string ToString() => ToString(format: default, formatProvider: default);
@@ -143,23 +158,16 @@ public struct PenProximityEvent : ICommonEvent<PenProximityEvent>, IFormattable,
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append($", {nameof(PenId)}: ")
-							   .Append(PenId.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+#if SDL3_4_16_OR_GREATER
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+			nameof(PenId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(PenState)}: {mPenState} }}";
+#else
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+			nameof(PenId)}: {mWhich.ToString(format, formatProvider)} }}";
+#endif
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -167,38 +175,15 @@ public struct PenProximityEvent : ICommonEvent<PenProximityEvent>, IFormattable,
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(PenId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(PenId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
+#if SDL3_4_16_OR_GREATER
+			&& SpanFormat.TryWrite($", {nameof(PenState)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mPenState, ref destination, ref charsWritten)
+#endif
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in PenProximityEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.PenProximityIn"/>, or <see cref="EventType.PenProximityOut"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.PenProximityIn"/>, nor <see cref="EventType.PenProximityOut"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator PenProximityEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotPenProximityEvent();
-		}
-
-		return @event.PProximity;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotPenProximityEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(PenProximityEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Buffers;
 using System.Diagnostics;
@@ -6,84 +7,56 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal TextEditingEvent Edit;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="TextEditingEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="TextEditingEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in TextEditingEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Edit = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when <see cref="EventType.TextEditing">text editing</see> happens
+/// Represents an event that occurs when the user is editing text
 /// </summary>
 /// <remarks>
 /// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.TextEditing"/></description></item>
 /// </list>
 /// </para>
+/// <para>
+/// Note that <see cref="TextEditingEvent"/>s won't be received unless text input was started for a <see cref="Video.Windowing.Window"/> by calling <see cref="Window.TryStartTextInput()"/> or <see cref="Window.TryStartTextInput(Sdl3Sharp.Input.TextInputType?, Sdl3Sharp.Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Sdl3Sharp.Properties?)"/> on that window.
+/// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, ISpanFormattable
+public partial struct TextEditingEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.TextEditing;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<TextEditingEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref TextEditingEvent ICommonEvent<TextEditingEvent>.GetReference(ref Event @event) => ref @event.Edit;
-
 	private CommonEvent mCommon;
 	private uint mWindowID;
-	private unsafe readonly byte* mText;
+	private unsafe readonly byte* mText; // Because we have no safe way to set text from the managed side, this field is readonly.
 	private int mStart;
 	private int mLength;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.TextEditing"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.TextEditing"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="TextEditingEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(TextEditingEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of an {nameof(TextEditingEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -95,15 +68,42 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with keyboard focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with keyboard focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="TextEditingEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="TextEditingEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
 	}
 
 	/// <summary>
@@ -115,42 +115,62 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 	/// <remarks>
 	/// <para>
 	/// Reading this property can be very expensive, you should consider caching it's value.
-	/// If you want to get the <see cref="Text"/>, <see cref="Start"/>, and <see cref="Length"/> simultaneously, consider using the <see cref="GetTextStartAndLength"/> method as it's way more efficient when getting all three quantities at once. 
-	/// </para>
-	/// <para>
-	/// Setting this property is not supported and will lead the property to throw a <see cref="NotSupportedException"/>.
+	/// If you want to get the <see cref="Text"/>, <see cref="Start"/>, and <see cref="Length"/> simultaneously, consider using the <see cref="GetTextStartAndLength"/> method as it can be more efficient to get all three quantities at once. 
 	/// </para>
 	/// </remarks>
-	/// <exception cref="NotSupportedException">When setting this property</exception>
-	public string? Text
+	/// <exception cref="InvalidOperationException">The text that the <see cref="TextEditingEvent"/> contains is <c><see langword="null"/></c></exception>
+	public readonly string Text // This property is readonly because we have no safe way to set text from the managed side
 	{
-		readonly get { unsafe { return Utf8StringMarshaller.ConvertToManaged(mText); } }
+		get
+		{
+			unsafe
+			{
+				if (mText is null)
+				{
+					[DoesNotReturn]
+					static void failTextNull() => throw new InvalidOperationException($"The {nameof(Text)} that the {nameof(TextEditingEvent)} contains is null.");
 
-		[Obsolete($"Setting {nameof(Text)} is not supported yet.")]
-		[DoesNotReturn]
-		set => throw new NotSupportedException($"Setting {nameof(Text)} is not supported");
+					failTextNull();
+				}
+
+				using var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText);
+				return textUtf16.ToManaged()!; // this would only return null if the `mText` pointer is null
+			}
+		}
 	}
 
-	internal readonly ReadOnlySpan<byte> TextUtf8
+	internal unsafe readonly byte* TextUtf8 // This property is readonly because we have no safe way to set text from the managed side
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get { unsafe { return MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText); } }
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mText;
 	}
 
 	/// <summary>
-	/// Gets or set the starting cursor of the selected editing text
+	/// Gets or sets the starting cursor position of the selected part of the <see cref="Text">editing text</see>
 	/// </summary>
 	/// <value>
-	/// The starting cursor of the selected editing text, as a position in number of characters, or <c>-1</c> if not set
+	/// The starting cursor position of the selected part of the <see cref="Text">editing text</see>, or <c>-1</c> if not set
 	/// </value>
 	/// <remarks>
 	/// <para>
-	/// The starting cursor is the position, in number of characters, where new typing will be inserted into the editing text.
+	/// The value of the property represents the character position into <see cref="Text"/> where new typing will be inserted.
 	/// </para>
 	/// <para>
 	/// Reading and writing this property can be very expensive, you should consider caching it's value.
-	/// If you want to get the <see cref="Text"/>, <see cref="Start"/>, and <see cref="Length"/> simultaneously, consider using the <see cref="GetTextStartAndLength"/> method as it's way more efficient when getting all three quantities at once. 
+	/// If you want to get the <see cref="Text"/>, <see cref="Start"/>, and <see cref="Length"/> simultaneously, consider using the <see cref="GetTextStartAndLength"/> method as it can be more efficient to get all three quantities at once.
 	/// </para>
 	/// </remarks>
+	/// <exception cref="InvalidOperationException">
+	/// When getting this property, the text that the <see cref="TextEditingEvent"/> contains is <c><see langword="null"/></c> and the value of <see cref="Start"/> value is not <c>-1</c>
+	/// - OR -
+	/// When getting this property, the value of <see cref="Start"/> is out of range for the current <see cref="Text"/>
+	/// - OR -
+	/// When getting or setting this property, the text that the <see cref="TextEditingEvent"/> contains has invalid UTF-8 data
+	/// </exception>
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the text that the <see cref="TextEditingEvent"/> contains is <c><see langword="null"/></c> and the value being set is not <c>-1</c>
+	/// - OR -
+	/// When setting this property, the value being set is out of range for the current <see cref="Text"/>
+	/// </exception>
 	public int Start
 	{
 		readonly get
@@ -162,20 +182,47 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 					return -1;
 				}
 
+				if (mText is null)
+				{
+					[DoesNotReturn]
+					static void failTextNull() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Start)} value that is out of range when {nameof(Text)} is null.");
+
+					failTextNull();
+				}
+
+				if (mStart is 0)
+				{
+					return 0;
+				}
+
 				var text = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText);
 				var startUtf16 = 0;
 
-				for (var scalar = 0;
+				for (var scalar = 0; scalar < mStart; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the `mStatrt` value is out of range for the current text -> throw an exception
 
-					 scalar < mStart
-					 && text.Length is > 0
-					 && Rune.DecodeFromUtf8(text, out var rune, out var bytesConsumed) is OperationStatus.Done;
+						[DoesNotReturn]
+						static void failOutOfRange() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Start)} value that is out of range for the current {nameof(Text)}.");
 
-					 startUtf16 += rune.Utf16SequenceLength,
-					 scalar++,
-					 text = text[bytesConsumed..]
-				)
-				{ }
+						failOutOfRange();
+					}
+
+					if (Rune.DecodeFromUtf8(text, out var rune, out var bytesConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf8() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid UTF-8 data in its {nameof(TextUtf8)}.");
+
+						failInvalidUtf8();
+					}
+
+					startUtf16 += rune.Utf16SequenceLength;
+					text = text[bytesConsumed..];
+				}
 
 				return startUtf16;
 			}
@@ -191,20 +238,48 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 					return;
 				}
 
+				if (mText is null)
+				{
+					[DoesNotReturn]
+					static void failTextNull(int value) => throw new ArgumentOutOfRangeException(nameof(value), value, $"Cannot set the {nameof(Start)} value to anything other than -1 when {nameof(Text)} is null.");
+
+					failTextNull(value);
+				}
+
+				if (value is 0)
+				{
+					mStart = 0;
+					return;
+				}
+
 				var text = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText);
 				var scalar = 0;
 
-				for (var startUtf16 = 0;
+				for (var startUtf16 = 0; startUtf16 < value; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the given value is out of range for the current text -> throw an exception
 
-					 startUtf16 < value
-					 && text.Length is > 0
-					 && Rune.DecodeFromUtf8(text, out var rune, out var bytesConsumed) is OperationStatus.Done;
+						[DoesNotReturn]
+						static void failOutOfRange(int value) => throw new ArgumentOutOfRangeException(nameof(value), value, $"The given {nameof(value)} is out of range for the current {nameof(Text)}.");
 
-					 scalar++,
-					 startUtf16 += rune.Utf16SequenceLength,
-					 text = text[bytesConsumed..]
-				)
-				{ }
+						failOutOfRange(value);
+					}
+
+					if (Rune.DecodeFromUtf8(text, out var rune, out var bytesConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf8() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid UTF-8 data in its {nameof(TextUtf8)}.");
+
+						failInvalidUtf8();
+					}
+
+					startUtf16 += rune.Utf16SequenceLength;
+					text = text[bytesConsumed..];
+				}
 
 				mStart = scalar;
 			}
@@ -218,20 +293,32 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the length of the selected editing text
+	/// Gets or sets the length of the selected part of the <see cref="Text">editing text</see>
 	/// </summary>
 	/// <value>
-	/// The length of the selected editing text, as a length in number of characters, or <c>-1</c> if not set
+	/// The length of the selected part of the <see cref="Text">editing text</see>, or <c>-1</c> if not set
 	/// </value>
 	/// <remarks>
 	/// <para>
-	/// The length is the number of characters that will be replaced by new typing.
+	/// The value of this property represents the number of characters that will be replaced in <see cref="Text"/> by the new typing.
 	/// </para>
 	/// <para>
 	/// Reading and writing this property can be very expensive, you should consider caching it's value.
-	/// If you want to get the <see cref="Text"/>, <see cref="Start"/>, and <see cref="Length"/> simultaneously, consider using the <see cref="GetTextStartAndLength"/> method as it's way more efficient when getting all three quantities at once. 
+	/// If you want to get the <see cref="Text"/>, <see cref="Start"/>, and <see cref="Length"/> simultaneously, consider using the <see cref="GetTextStartAndLength"/> method as it can be more efficient to get all three quantities at once.
 	/// </para>
 	/// </remarks>
+	/// <exception cref="InvalidOperationException">
+	/// When getting this property, the text that the <see cref="TextEditingEvent"/> contains is <c><see langword="null"/></c> and the value of <see cref="Length"/> is not <c>-1</c> or <c>0</c>
+	/// - OR -
+	/// When getting this property, the value of <see cref="Start"/> or <see cref="Length"/> is out of range for the current <see cref="Text"/>
+	/// - OR -
+	/// When getting or setting this property, the text that the <see cref="TextEditingEvent"/> contains has invalid UTF-8 data
+	/// </exception>
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the text that the <see cref="TextEditingEvent"/> contains is <c><see langword="null"/></c> and the value being set is not <c>-1</c> or <c>0</c>
+	/// - OR -
+	/// When setting this property, the value being set is out of range for the current <see cref="Text"/>
+	/// </exception>
 	public int Length
 	{
 		readonly get
@@ -243,30 +330,71 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 					return -1;
 				}
 
+				if (mLength is 0)
+				{
+					return 0;
+				}
+
+				if (mText is null)
+				{
+					[DoesNotReturn]
+					static void failTextNull() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Length)} value that is out of range when {nameof(Text)} is null.");
+
+					failTextNull();
+				}
+
 				var text = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText);
+
+				for (var scalar = 0; scalar < mStart; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the `mStart` value is out of range for the current text -> throw an exception
+
+						[DoesNotReturn]
+						static void failOutOfRange() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Start)} value that is out of range for the current {nameof(Text)}.");
+
+						failOutOfRange();
+					}
+
+					if (Rune.DecodeFromUtf8(text, out _, out var bytesConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf8() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid UTF-8 data in its {nameof(TextUtf8)}.");
+
+						failInvalidUtf8();
+					}
+
+					text = text[bytesConsumed..];
+				}
+
 				var lengthUtf16 = 0;
 
-				for (var scalar = 0;
+				for (var scalar = 0; scalar < mLength; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the `mLength` value is out of range for the current text -> throw an exception
 
-					 scalar < mStart
-					 && text.Length is > 0
-					 && Rune.DecodeFromUtf8(text, out _, out var bytesConsumed) is OperationStatus.Done;
+						[DoesNotReturn]
+						static void failOutOfRange() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Length)} value that is out of range for the current {nameof(Text)}.");
+						failOutOfRange();
+					}
 
-					 scalar++,
-					 text = text[bytesConsumed..]
-				)
-				{ }
+					if (Rune.DecodeFromUtf8(text, out var rune, out var bytesConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+						[DoesNotReturn]
+						static void failInvalidUtf8() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid UTF-8 data in its {nameof(TextUtf8)}.");
 
-				for (var scalar = 0;
+						failInvalidUtf8();
+					}
 
-					scalar < mLength
-					&& text.Length is > 0
-					&& Rune.DecodeFromUtf8(text, out var rune, out int bytesConsumed) is OperationStatus.Done;
-
-					lengthUtf16 += rune.Utf16SequenceLength,
-					scalar++,
-					text = text[bytesConsumed..])
-				{ }
+					lengthUtf16 += rune.Utf16SequenceLength;
+					text = text[bytesConsumed..];
+				}
 
 				return lengthUtf16;
 			}
@@ -282,32 +410,75 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 					return;
 				}
 
+				if (value is 0)
+				{
+					mLength = 0;
+					return;
+				}
+
+				if (mText is null)
+				{
+					[DoesNotReturn]
+					static void failTextNull() => throw new InvalidOperationException($"Cannot set the {nameof(Length)} value to anything other than -1 or 0 when {nameof(Text)} is null.");
+
+					failTextNull();
+				}
+
 				var text = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText);
 				var scalar = 0;
 
-				for (;
+				for (; scalar < mStart; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the given value is out of range for the current text -> throw an exception
 
-					 scalar < mStart
-					 && text.Length is > 0
-					 && Rune.DecodeFromUtf8(text, out _, out var bytesConsumed) is OperationStatus.Done;
+						[DoesNotReturn]
+						static void failOutOfRange(int value) => throw new ArgumentOutOfRangeException(nameof(value), value, $"The given {nameof(value)} is out of range for the current {nameof(Text)}.");
 
-					 scalar++,
-					 text = text[bytesConsumed..]
-				)
-				{ }
+						failOutOfRange(value);
+					}
+
+					if (Rune.DecodeFromUtf8(text, out _, out var bytesConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf8() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid UTF-8 data in its {nameof(TextUtf8)}.");
+
+						failInvalidUtf8();
+					}
+
+					text = text[bytesConsumed..];
+				}
 
 				scalar = 0;
 
-				for (var lengthUtf16 = 0;
+				for (var lengthUtf16 = 0; lengthUtf16 < value; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the given value is out of range for the current text -> throw an exception
 
-					lengthUtf16 < value
-					&& text.Length is > 0
-					&& Rune.DecodeFromUtf8(text, out var rune, out int bytesConsumed) is OperationStatus.Done;
+						[DoesNotReturn]
+						static void failOutOfRange(int value) => throw new ArgumentOutOfRangeException(nameof(value), value, $"The given {nameof(value)} is out of range for the current {nameof(Text)}.");
 
-					lengthUtf16 += rune.Utf16SequenceLength,
-					scalar++,
-					text = text[bytesConsumed..])
-				{ }
+						failOutOfRange(value);
+					}
+
+					if (Rune.DecodeFromUtf8(text, out var rune, out var bytesConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf8() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid UTF-8 data in its {nameof(TextUtf8)}.");
+
+						failInvalidUtf8();
+					}
+
+					lengthUtf16 += rune.Utf16SequenceLength;
+					text = text[bytesConsumed..];
+				}
 
 				mLength = scalar;
 			}
@@ -321,74 +492,113 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets the editing text, the starting cursor of the selected editing text, and the length of the selected editing text simultaneously
+	/// Gets the editing text, the starting cursor position of the selected part of the editing text, and the length of the selected part of the editing text simultaneously
 	/// </summary>
-	/// <returns>The editing text, the starting cursor of the selected editing text, as a position in number of characters, or <c>-1</c> if not set, and length of the selected editing text, as a length in number of characters, or <c>-1</c> if not set</returns>
-	/// <remarks>
-	/// <para>
-	/// The starting cursor is the position, in number of characters, where new typing will be inserted into the editing text.
-	/// </para>
-	/// <para>
-	/// The resulting length is the number of characters that will be replaced by new typing.
-	/// </para>
-	/// <para>
-	/// Calling this method can be very expensive, you should consider caching it's return values.
-	/// </para>
-	/// </remarks>
-	public readonly (string? Text, int Start, int Length) GetTextStartAndLength()
+	/// <param name="text">The editing text</param>
+	/// <param name="start">The starting cursor position of the selected part of the editing text, or <c>-1</c> if not set</param>
+	/// <param name="length">The length of the selected part of the editing text, or <c>-1</c> if not set</param>
+	/// <exception cref="InvalidOperationException">
+	/// The text that the <see cref="TextEditingEvent"/> contains is <c><see langword="null"/></c>
+	/// - OR -
+	/// The value of <see cref="Start"/> or <see cref="Length"/> is out of range for the current <see cref="Text"/>
+	/// - OR -
+	/// The text that the <see cref="TextEditingEvent"/> contains has invalid UTF-8 data
+	/// </exception>
+	public readonly void GetTextStartAndLength(out string text, out int start, out int length)
 	{
 		unsafe
 		{
-			var text = Utf8StringMarshaller.ConvertToManaged(mText);
-
-			if (mStart is < 0 && mLength is < 0)
+			if (mText is null)
 			{
-				return (text, Start: -1, Length: -1);
+				[DoesNotReturn]
+				static void failTextNull() => throw new InvalidOperationException($"The {nameof(Text)} that the {nameof(TextEditingEvent)} contains is null.");
+
+				failTextNull();
 			}
 
-			var span = text.AsSpan();
-			var startUtf16 = 0;
-			var lengthUtf16 = 0;
-
-			for (var scalar = 0;
-
-				 scalar < mStart
-				 && span.Length is > 0
-				 && Rune.DecodeFromUtf16(span, out _, out var charsConsumed) is OperationStatus.Done;
-
-				 startUtf16 += charsConsumed,
-				 scalar++,
-				 span = span[charsConsumed..]
-				)
-			{ }
-
-			if (mLength is < 0)
+			using (var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText))
 			{
-				lengthUtf16 = -1;
+				text = textUtf16.ToManaged()!;
+			}
 
-				// we know that mStart can't be < 0
+			var textSpan = text.AsSpan();
+
+			if (mStart is < 0)
+			{
+				start = -1;
+			}
+			else if (mStart is 0)
+			{
+				start = 0;
 			}
 			else
 			{
-				if (mStart is < 0)
+				start = 0;
+
+				for (var scalar = 0; scalar < mStart; scalar++)
 				{
-					startUtf16 = -1;
+					if (text.Length is not > 0)
+					{
+						// this means the `mStart` value is out of range for the current text -> throw an exception
+
+						[DoesNotReturn]
+						static void failOutOfRange() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Start)} value that is out of range for the current {nameof(Text)}.");
+
+						failOutOfRange();
+					}
+
+					if (Rune.DecodeFromUtf16(textSpan, out _, out var charsConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf16() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid data in its {nameof(Text)}.");
+
+						failInvalidUtf16();
+					}
+
+					start += charsConsumed;
+					textSpan = textSpan[charsConsumed..];
 				}
-
-				for (var scalar = 0;
-
-					 scalar < mLength
-					 && span.Length is > 0
-					 && Rune.DecodeFromUtf16(span, out _, out int charsConsumed) is OperationStatus.Done;
-
-					 lengthUtf16 += charsConsumed,
-					 scalar++,
-					 span = span[charsConsumed..]
-					)
-				{ }
 			}
 
-			return (text, startUtf16, lengthUtf16);
+			if (mLength is < 0)
+			{
+				length = -1;
+			}
+			else if (mLength is 0)
+			{
+				length = 0;
+			}
+			else
+			{
+				length = 0;
+
+				for (var scalar = 0; scalar < mLength; scalar++)
+				{
+					if (text.Length is not > 0)
+					{
+						// this means the `mLength` value is out of range for the current text -> throw an exception
+						[DoesNotReturn]
+
+						static void failOutOfRange() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains an invalid {nameof(Length)} value that is out of range for the current {nameof(Text)}.");
+						failOutOfRange();
+					}
+
+					if (Rune.DecodeFromUtf16(textSpan, out _, out var charsConsumed) is not OperationStatus.Done)
+					{
+						// this is actually bad and an error we can't really recover from -> throw an exception
+
+						[DoesNotReturn]
+						static void failInvalidUtf16() => throw new InvalidOperationException($"The {nameof(TextEditingEvent)} contains invalid data in its {nameof(Text)}.");
+
+						failInvalidUtf16();
+					}
+
+					length += charsConsumed;
+					textSpan = textSpan[charsConsumed..];
+				}
+			}
 		}
 	}
 
@@ -402,90 +612,140 @@ public struct TextEditingEvent : ICommonEvent<TextEditingEvent>, IFormattable, I
 	public readonly string ToString(string? format) => ToString(format, formatProvider: default);
 
 	/// <inheritdoc/>
-	public readonly string ToString(string? format, IFormatProvider? formatProvider)
+	public readonly string ToString(string? format, IFormatProvider? formatProvider)	
 	{
-		var builder = Shared.StringBuilder;
-		try
+		const string fallbackValueMessage = "could not get value";
+
+		unsafe
 		{
-			var (text, start, length) = GetTextStartAndLength();
+			using var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText);
 
-			ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-						.Append($", {nameof(WindowId)}: ")
-						.Append(WindowId.ToString(format, formatProvider))
-						.Append($", {nameof(Text)}: ");
-
-			if (text is not null)
+			Unsafe.SkipInit(out int? start);
+			try
 			{
-				builder.Append('"')
-					   .Append(text)
-					   .Append('"');
+				start = Start;
 			}
-			else
+			catch
 			{
-				builder.Append("null");
+				start = null;
 			}
 
-			return builder.Append($", {nameof(Start)}: ")
-				          .Append(start.ToString(format, formatProvider))
-						  .Append($", {nameof(Length)}: ")
-						  .Append(length.ToString(format, formatProvider))
-						  .Append(" }")
-						  .ToString();
-		}
-		finally
-		{
-			builder.Clear();
+			Unsafe.SkipInit(out int? length);
+			try
+			{
+				length = Length;
+			}
+			catch
+			{
+				length = null;
+			}
+
+			return $"{{ {mCommon.ToPartialString()}, {
+				nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+				nameof(Text)}: {textUtf16.Buffer switch { not null => $"\"{textUtf16.ToManaged()}\"", null => "null" }}, {
+				nameof(Start)}: {start switch { int startValue => startValue.ToString(format, formatProvider), null => fallbackValueMessage }}, {
+				nameof(Length)}: {length switch { int lengthValue => lengthValue.ToString(format, formatProvider), null => fallbackValueMessage }} }}";
 		}
 	}
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
 	{
-		var (text, start, length) = GetTextStartAndLength();
+		const string fallbackValueMessage = "could not get value";
 
-		charsWritten = 0;
-
-		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
-			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
-			&& SpanFormat.TryWrite($", {nameof(Text)}", ref destination, ref charsWritten)
-			&& (text is not null
-				?  SpanFormat.TryWrite('"', ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite(text, ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)
-				:  SpanFormat.TryWrite("null", ref destination, ref charsWritten))
-			&& SpanFormat.TryWrite($", {nameof(Start)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(start, ref destination, ref charsWritten, format, provider)
-			&& SpanFormat.TryWrite($", {nameof(LengthUtf8)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(length, ref destination, ref charsWritten, format, provider)
-			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in TextEditingEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.TextEditing"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.TextEditing"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator TextEditingEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
+		unsafe
 		{
-			failEventArgumentIsNotTextEditingEvent();
+			charsWritten = 0;
+
+			if ( !(SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
+				&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
+				&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
+				&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
+				&& SpanFormat.TryWrite($", {nameof(Text)}: ", ref destination, ref charsWritten)))
+			{
+				return false;
+			}
+
+			using var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText);
+
+			if (textUtf16.Buffer is not null)
+			{
+				if ( !(SpanFormat.TryWrite('"', ref destination, ref charsWritten)
+					&& SpanFormat.TryWrite(textUtf16.AsSpan(), ref destination, ref charsWritten)
+					&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+				{
+					return false;
+				}
+			}
+			else
+			{
+				if (!(SpanFormat.TryWrite("null", ref destination, ref charsWritten)))
+				{
+					return false;
+				}
+			}
+
+			if (!SpanFormat.TryWrite($", {nameof(Start)}: ", ref destination, ref charsWritten))
+			{
+				return false;
+			}
+
+			Unsafe.SkipInit(out int? start);
+			try
+			{
+				start = Start;
+			}
+			catch
+			{
+				start = null;
+			}
+
+			if (start is int startValue)
+			{
+				if (!SpanFormat.TryWrite(startValue, ref destination, ref charsWritten, format, provider))
+				{
+					return false;
+				}
+			}
+			else
+			{
+				if (!SpanFormat.TryWrite(fallbackValueMessage, ref destination, ref charsWritten))
+				{
+					return false;
+				}
+			}
+
+			if (!SpanFormat.TryWrite($", {nameof(Length)}: ", ref destination, ref charsWritten))
+			{
+				return false;
+			}
+
+			Unsafe.SkipInit(out int? length);
+			try
+			{
+				length = Length;
+			}
+			catch
+			{
+				length = null;
+			}
+
+			if (length is int lengthValue)
+			{
+				if (!SpanFormat.TryWrite(lengthValue, ref destination, ref charsWritten, format, provider))
+				{
+					return false;
+				}
+			}
+			else
+			{
+				if (!SpanFormat.TryWrite(fallbackValueMessage, ref destination, ref charsWritten))
+				{
+					return false;
+				}
+			}
+
+			return SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 		}
-
-		return @event.Edit;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotTextEditingEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(TextEditingEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

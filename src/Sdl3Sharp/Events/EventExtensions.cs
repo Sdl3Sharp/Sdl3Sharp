@@ -1,162 +1,133 @@
-﻿using Sdl3Sharp.Utilities;
-using Sdl3Sharp.Video.Rendering;
+﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System.Runtime.CompilerServices;
 
 namespace Sdl3Sharp.Events;
 
 /// <summary>
-/// Provides extension methods for <see cref="Event"/> and other *Event structures
+/// Provides extension methods for the <see cref="Event"/> structure
 /// </summary>
 public static partial class EventExtensions
 {
-	extension<TEvent>(ref TEvent @event)
-		where TEvent : unmanaged, ICommonEvent<TEvent>
+	extension(in Event @event)
 	{
+#if SDL3_4_0_OR_GREATER
+
 		/// <summary>
-		/// Tries to convert the coordinates of an event to render coordinates, in place
+		/// Gets an English description of the event
 		/// </summary>
-		/// <typeparam name="TRenderer">The type of renderer to convert the event for</typeparam>
-		/// <param name="renderer">The renderer to convert the event for</param>
-		/// <returns><c><see langword="true"/></c>, if the conversion was successful and the event was modified in place; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+		/// <value>
+		/// An English description of the event
+		/// </value>
 		/// <remarks>
 		/// <para>
-		/// This method modifies the event in place. If you want to keep the original event, you should make a copy of it beforehand.
+		/// The value of this property might look something like this:
+		/// <code>
+		/// SDL_EVENT_MOUSE_MOTION (timestamp=1140256324 windowid=2 which=0 state=0 x=492.99 y=139.09 xrel=52 yrel=6)
+		/// </code>
 		/// </para>
 		/// <para>
-		/// The conversion takes into account several factors:
-		/// <list type="bullet">
-		///	<item><description>The <see cref="Renderer.Window"/> dimensions</description></item>
-		///	<item><description>The <see cref="Renderer.LogicalPresentation"/> settings</description></item>
-		///	<item><description>The <see cref="Renderer.Scale"/> settings</description></item>
-		///	<item><description>The <see cref="Renderer.Viewport"/> settings</description></item>
-		/// </list>
+		/// The exact format of the string is not guaranteed; it is intended for logging purposes, to be read by a human, and not parsed by a computer.
 		/// </para>
 		/// <para>
-		/// Various event types can be converted with this method, including <see cref="MouseButtonEvent"/>, <see cref="MouseMotionEvent"/>, <see cref="MouseWheelEvent"/>, <see cref="TouchFingerEvent"/>, <see cref="PenMotionEvent"/>, <see cref="PenTouchEvent"/>, etc.
-		/// </para>
-		/// <para>
-		/// Touch coordinates are converted from normalized coordinates in the window to non-normalized rendering coordinates.
-		/// </para>
-		/// <para>
-		/// Relative mouse coordinates (e.g. <see cref="MouseMotionEvent.RelativeX"/> and <see cref="MouseMotionEvent.RelativeY"/>) are <em>also</em> converted.
-		/// Applications that do not want these coordinates to be converted should use the <see cref="Renderer.TryConvertWindowToRenderCoordinates(float, float, out float, out float)"/> method
-		/// with the specific property values of the event instead of converting the entire event.
-		/// </para>
-		/// <para>
-		/// Converted coordinates may be outside of the bound of the current rendering area.
-		/// </para>
-		/// <para>
-		/// This method should only be called from the main thread.
+		/// You might prefer to use the <c>ToString</c> or <c>TryFormat</c> methods of the event structure instead of this property.
 		/// </para>
 		/// </remarks>
-		public bool TryConvertToRenderCoordinates<TRenderer>(TRenderer renderer)
-			where TRenderer : notnull, Renderer
+		public string Description
 		{
-			unsafe
+			get
 			{
-				// we're going to do a dangerous pointer cast here, so we need to make sure the event is of the correct type first
-				// if SDL was to read beyond the (memory) bounds of the event struct, just because it expected a different event type, we'd be in trouble
-
-				if (!TEvent.Accepts(@event.Type))
+				unsafe
 				{
-					return false;
+					fixed (Event* eventPtr = &@event)
+					{
+						var length = SDL_GetEventDescription(eventPtr, buf: null, buflen: 0);
+						length = unchecked(length + 1); // For null terminator
+
+						byte* description;
+						bool isHeapAllocated;
+
+						if (length is <= 256)
+						{
+							var stackPtr = stackalloc byte[length];
+							description = stackPtr;
+							isHeapAllocated = false;
+						}
+						else
+						{
+							description = unchecked((byte*)Utilities.NativeMemory.Malloc(unchecked((nuint)length * sizeof(byte))));
+							isHeapAllocated = true;
+						}
+
+						try
+						{
+							length = SDL_GetEventDescription(eventPtr, description, length);
+
+							using var descriptionUtf16 = NativeStrings.FromUtf8ToUtf16(description, unchecked((nuint)length));
+
+							return descriptionUtf16.ToManaged()!;
+						}
+						finally
+						{
+							if (isHeapAllocated)
+							{
+								Utilities.NativeMemory.Free(description);
+							}
+						}
+					}
 				}
+			}
+		}
 
-				fixed (TEvent* eventPtr = &@event)
+#endif
+
+		/// <summary>
+		/// Gets the window associated with the event, if any
+		/// </summary>
+		/// <value>
+		/// The window associated with the event, or <c><see langword="null"/></c> if there is none
+		/// </value>
+		/// <remarks>
+		/// <para>
+		/// This property can be used to get the window associated with the event, if any, without the need to check and convert the event to the appropriate type first.
+		/// For example, if you have a <see cref="WindowEvent"/> or a <see cref="MouseMotionEvent"/>, you can use this property to get the value of their <see cref="WindowEvent.Window"/> or <see cref="MouseMotionEvent.Window"/> properties, respectively,
+		/// without having to check the event type and convert it first.
+		/// </para>
+		/// </remarks>
+		public Window? Window
+		{
+			get
+			{
+				unsafe
 				{
-					return SDL_ConvertEventToRenderCoordinates(renderer is not null ? renderer.Pointer : null, unchecked((Event*)eventPtr));
+					fixed (Event* eventPtr = &@event)
+					{
+						Window.TryGetOrCreate(SDL_GetWindowFromEvent(eventPtr), out var window);
+						return window;
+					}
 				}
 			}
 		}
 	}
 
-	extension(ref Event @event)
+	extension<TEvent>(TEvent @event)           // `in`/`ref readonly` receiver arguments in extension members are still not a thing in C# 14.0, so we have to "copy".
+		where TEvent : notnull, IEvent<TEvent>
 	{
-		/// <summary>
-		/// Tries to reference an <see cref="Event"/> as a specific <typeparamref name="TEvent"/>
-		/// </summary>
-		/// <typeparam name="TEvent">The type of event to cast the <see cref="Event"/> to</typeparam>
-		/// <param name="result">The <see cref="Event"/> referenced as a specific <typeparamref name="TEvent"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="NullableRef{T}"/>)</c></param>
-		/// <returns><c><see langword="true"/></c>, if the <see cref="Event"/> is a <typeparamref name="TEvent"/> by it's <see cref="Event.Type"/>; otherwise, <c><see langword="false"/></c></returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		public bool TryAs<TEvent>(out NullableRef<TEvent> result)
-			where TEvent : unmanaged, ICommonEvent<TEvent>
+#if SDL3_4_0_OR_GREATER
+
+		/// <inheritdoc cref="get_Description(in Event)"/>
+		public string Description
 		{
-			if (TEvent.Accepts(@event.Type))
-			{
-				result = new(ref TEvent.GetReference(ref @event));
-
-				return true;
-			}
-
-			result = default;
-
-			return false;
+			// These `get` implementations mitigate the need for a copy a bit, as they make a copy inevitable anyways (we need to make sure that we present a pointer to a *whole* `Event` structure to `SDL_GetEventDescription`).
+			// So with aggressive inlining and optimization, hopefully that's just a single copy.
+			[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+#if NET11_0_OR_GREATER
+			get => get_Description(@event);
+#else
+			get => Event.From(@event).Description;
+#endif
 		}
 
-		/// <summary>
-		/// References an <see cref="Event"/> as a specific <typeparamref name="TEvent"/>
-		/// </summary>
-		/// <typeparam name="TEvent">The type of event to cast the <see cref="Event"/> to</typeparam>
-		/// <returns>The <see cref="Event"/> referenced as a specific <typeparamref name="TEvent"/></returns>
-		/// <remarks>
-		/// <para>
-		/// <em>WARNING</em>: Use with caution. This method does not perform any type checking. You should check the <see cref="Event"/>'s <see cref="Event.Type"/> manually before calling this method to ensure it is of the expected type!
-		/// </para>
-		/// </remarks>
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		public ref TEvent UnsafeAs<TEvent>()
-			where TEvent : unmanaged, ICommonEvent<TEvent>
-			=> ref TEvent.GetReference(ref @event);
-	}
-
-	extension(ref readonly Event @event)
-	{
-		/// <summary>
-		/// Determines whether the <see cref="Event"/> is a specific <typeparamref name="TEvent"/>
-		/// </summary>
-		/// <typeparam name="TEvent">The type of event to check against</typeparam>
-		/// <returns><c><see langword="true"/></c>, if the <see cref="Event"/> is a <typeparamref name="TEvent"/> by it's <see cref="Event.Type"/>; otherwise, <c><see langword="false"/></c></returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		public bool Is<TEvent>()
-			where TEvent : unmanaged, ICommonEvent<TEvent>
-			=> TEvent.Accepts(@event.Type);
-
-		/// <summary>
-		/// Tries to reference an <see cref="Event"/> as a specific <em>read-only</em> <typeparamref name="TEvent"/>
-		/// </summary>
-		/// <typeparam name="TEvent">The type of event to cast the <see cref="Event"/> to</typeparam>
-		/// <param name="result">The <see cref="Event"/> referenced as a specific <em>read-only</em> <typeparamref name="TEvent"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="NullableRefReadOnly{T}"/>)</c></param>
-		/// <returns><c><see langword="true"/></c>, if the <see cref="Event"/> is a <typeparamref name="TEvent"/> by it's <see cref="Event.Type"/>; otherwise, <c><see langword="false"/></c></returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		public bool TryAsReadOnly<TEvent>(out NullableRefReadOnly<TEvent> result)
-			where TEvent : unmanaged, ICommonEvent<TEvent>
-		{
-			if (TEvent.Accepts(@event.Type))
-			{
-				result = new(ref TEvent.GetReference(ref Unsafe.AsRef(in @event)));
-
-				return true;
-			}
-
-			result = default;
-
-			return false;
-		}
-
-		/// <summary>
-		/// References an <see cref="Event"/> as a specific <em>read-only</em> <typeparamref name="TEvent"/>
-		/// </summary>
-		/// <typeparam name="TEvent">The type of event to cast the <see cref="Event"/> to</typeparam>
-		/// <returns>The <see cref="Event"/> referenced as a specific <em>read-only</em> <typeparamref name="TEvent"/></returns>
-		/// <remarks>
-		/// <para>
-		/// <em>WARNING</em>: Use with caution. This method does not perform any type checking. You should check the <see cref="Event"/>'s <see cref="Event.Type"/> manually before calling this method to ensure it is of the expected type!
-		/// </para>
-		/// </remarks>
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		public ref readonly TEvent UnsafeAsReadOnly<TEvent>()
-			where TEvent : unmanaged, ICommonEvent<TEvent>
-			=> ref TEvent.GetReference(ref Unsafe.AsRef(in @event));
+#endif
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -8,24 +9,9 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal RenderEvent Render;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="RenderEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="RenderEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in RenderEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Render = @event;
-
-}
-
 /// <summary>
-/// Represents an event that occurs when the rendering context changes state
+/// Represents an event that occurs when a <see cref="Video.Rendering.Renderer"/>'s targets have been reset and their contents need to be updated,
+/// or when a render device has been reset (and all textures need to be recreated) or has been lost (and can't be recovered)
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,48 +25,33 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct RenderEvent : ICommonEvent<RenderEvent>, IFormattable, ISpanFormattable
+public partial struct RenderEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is >= EventType.RenderTargetsReset and <= EventType.RenderDeviceLost;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<RenderEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref RenderEvent ICommonEvent<RenderEvent>.GetReference(ref Event @event) => ref @event.Render;
-
 	private CommonEvent mCommon;
 	private uint mWindowID;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.RenderTargetsReset"/>, <see cref="EventType.RenderDeviceReset"/>, or <see cref="EventType.RenderDeviceLost"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.RenderTargetsReset"/>, <see cref="EventType.RenderDeviceReset"/>, nor <see cref="EventType.RenderDeviceLost"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="RenderEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(RenderEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(RenderEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -92,15 +63,33 @@ public struct RenderEvent : ICommonEvent<RenderEvent>, IFormattable, ISpanFormat
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> containing the renderer in question
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> containing the <see cref="Video.Rendering.Renderer"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> containing the renderer in question
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> containing the <see cref="Video.Rendering.Renderer"/> associated with this event, or <c>0</c> if the renderer is rendering to an off-screen target
 	/// </value>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> containing the <see cref="Video.Rendering.Renderer"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Video.Windowing.Window"/> containing the <see cref="Video.Rendering.Renderer"/> associated with this event, or <c><see langword="null"/></c> if the renderer is rendering to an off-screen target
+	/// </value>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		set => mWindowID = value?.Id ?? 0;
 	}
 
 	/// <inheritdoc/>
@@ -114,21 +103,8 @@ public struct RenderEvent : ICommonEvent<RenderEvent>, IFormattable, ISpanFormat
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -136,36 +112,9 @@ public struct RenderEvent : ICommonEvent<RenderEvent>, IFormattable, ISpanFormat
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in RenderEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.RenderTargetsReset"/>, <see cref="EventType.RenderDeviceReset"/>, or <see cref="EventType.RenderDeviceLost"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.RenderTargetsReset"/>, <see cref="EventType.RenderDeviceReset"/>, nor <see cref="EventType.RenderDeviceLost"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator RenderEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotPenTouchEvent();
-		}
-
-		return @event.Render;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotPenTouchEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(RenderEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

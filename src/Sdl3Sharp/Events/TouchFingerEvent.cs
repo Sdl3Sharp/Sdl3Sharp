@@ -1,30 +1,14 @@
 ﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal TouchFingerEvent TFinger;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="TouchFingerEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="TouchFingerEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in TouchFingerEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> TFinger = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a finger is <see cref="EventType.FingerDown">placed on</see>, <see cref="EventType.FingerMotion">moved on</see>, <see cref="EventType.FingerUp">lifted from</see>, or <see cref="EventType.FingerCanceled">canceled</see> on a touch device
+/// Represents an event that occurs when a <see cref="Input.Finger"/> is placed on or lifted from a <see cref="Input.TouchDevice"/>,
+/// when there's <see cref="Input.Finger"/> motion on a <see cref="Input.TouchDevice"/>, or when such a motion is canceled
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,57 +21,37 @@ partial struct Event
 /// </list>
 /// </para>
 /// </remarks>
-[DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
-[StructLayout(LayoutKind.Sequential)]
-public struct TouchFingerEvent : ICommonEvent<TouchFingerEvent>, IFormattable, ISpanFormattable
+public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 {
-	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is >= EventType.FingerDown and <= EventType.FingerCanceled;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<TouchFingerEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref TouchFingerEvent ICommonEvent<TouchFingerEvent>.GetReference(ref Event @event) => ref @event.TFinger;
-
 	private CommonEvent mCommon;
-	private ulong mTouchID;
-	private ulong mFingerID;
+	private ulong mTouchId;
+	private ulong mFingerId;
 	private float mX;
 	private float mY;
-	private float mDX;
-	private float mDY;
+	private float mDx;
+	private float mDy;
 	private float mPressure;
 	private uint mWindowID;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.FingerDown"/>, <see cref="EventType.FingerUp"/>, <see cref="EventType.FingerMotion"/>, or <see cref="EventType.FingerCanceled"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.FingerDown"/>, <see cref="EventType.FingerUp"/>, <see cref="EventType.FingerMotion"/>, nor <see cref="EventType.FingerCanceled"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="TouchFingerEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(TouchFingerEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(TouchFingerEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -99,34 +63,38 @@ public struct TouchFingerEvent : ICommonEvent<TouchFingerEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the touch device ID for the <see cref="TouchDevice"/> associated with the event
+	/// Gets or sets the <see cref="TouchDevice.Id">ID</see> of the <see cref="Input.TouchDevice"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The touch device ID for the <see cref="TouchDevice"/> associated with the event
+	/// The <see cref="TouchDevice.Id">ID</see> of the <see cref="Input.TouchDevice"/> associated with this event
 	/// </value>
-	public ulong TouchId
+	public ulong TouchDeviceId
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mTouchID;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTouchID = value;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mTouchId;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTouchId = value;
 	}
 
+	// TODO: Add a `TouchDevice` property once the `TouchDevice` type is implemented
+
 	/// <summary>
-	/// Gets or sets the finger ID for the <see cref="Finger"/> associated with the event
+	/// Gets or sets the <see cref="Finger.Id">ID</see> of the <see cref="Input.Finger"/> on the <see cref="Input.TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The finger ID for the <see cref="Finger"/> associated with the event
+	/// The <see cref="Finger.Id">ID</see> of the <see cref="Input.Finger"/> on the <see cref="Input.TouchDevice"/>
 	/// </value>
 	public ulong FingerId
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mFingerID;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mFingerID = value;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mFingerId;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mFingerId = value;
 	}
 
+	// TODO: Add a `Finger` property once the `Finger` type is implemented
+
 	/// <summary>
-	/// Gets or sets the X position of the finger on the touch device
+	/// Gets or sets the horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The X position of the finger on the touch device, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the left edge and <c>1</c> is the right edge
+	/// The horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the left edge and <c>1</c> is the right edge
 	/// </value>
 	/// <remarks>
 	/// <para>
@@ -142,10 +110,10 @@ public struct TouchFingerEvent : ICommonEvent<TouchFingerEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the Y position of the finger on the touch device
+	/// Gets or sets the vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The Y position of the finger on the touch device, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the top edge and <c>1</c> is the bottom edge
+	/// The vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the top edge and <c>1</c> is the bottom edge
 	/// </value>
 	/// <remarks>
 	/// <para>
@@ -161,51 +129,84 @@ public struct TouchFingerEvent : ICommonEvent<TouchFingerEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the change in X position of the finger on the touch device
+	/// Gets or sets the change in horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The change in X position of the finger on the touch device, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the right edge to the left edge, and <c>1</c> is a transversal all the way from the left edge to the right edge
+	/// The change in horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the right edge to the left edge, and <c>1</c> is a transversal all the way from the left edge to the right edge
 	/// </value>
-	public float DX
+	public float DeltaX
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mDX;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mDX = value;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mDx;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mDx = value;
 	}
 
 	/// <summary>
-	/// Gets or sets the change in Y position of the finger on the touch device
+	/// Gets or sets the change in vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The change in Y position of the finger on the touch device, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the bottom edge to the top edge, and <c>1</c> is a transversal all the way from the top edge to the bottom edge
+	/// The change in vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the bottom edge to the top edge, and <c>1</c> is a transversal all the way from the top edge to the bottom edge
 	/// </value>
-	public float DY
+	public float DeltaY
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mDY;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mDY = value;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mDy;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mDy = value;
 	}
 
 	/// <summary>
-	/// Gets or sets the pressure of the finger applied on the touch device
+	/// Gets or sets the pressure of the <see cref="Finger"/> applied on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The pressure of the finger applied on the touch device, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is no pressure and <c>1</c> is maximum pressure
+	/// The pressure of the <see cref="Finger"/> applied on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is no pressure and <c>1</c> is maximum pressure
 	/// </value>
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the given value is less than <c>0</c> or greater than <c>1</c>
+	/// </exception>
 	public float Pressure
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mPressure;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mPressure = value;
+
+		set
+		{
+			if (value is < 0f or > 1f)
+			{
+				[DoesNotReturn]
+				static void failInvalidPressure(float pressure) => throw new ArgumentOutOfRangeException(nameof(value), pressure, $"The {nameof(Pressure)} property must be between 0 and 1, inclusive.");
+
+				failInvalidPressure(value);
+			}
+
+			mPressure = value;
+		}
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> underneath the finger, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> underneath the <see cref="Finger"/>, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> underneath the finger, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> underneath the <see cref="Finger"/>, or <c>0</c> if there is no window underneath the finger or it cannot be determined
 	/// </value>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> underneath the <see cref="Finger"/>, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Video.Windowing.Window"/> underneath the <see cref="Finger"/>, or <c><see langword="null"/></c> if there is no window underneath the finger or it cannot be determined
+	/// </value>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		set => mWindowID = value?.Id ?? 0;
 	}
 
 	/// <inheritdoc/>
@@ -219,35 +220,15 @@ public struct TouchFingerEvent : ICommonEvent<TouchFingerEvent>, IFormattable, I
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(TouchId)}: ")
-							   .Append(TouchId.ToString(format, formatProvider))
-							   .Append($", {nameof(FingerId)}: ")
-							   .Append(FingerId.ToString(format, formatProvider))
-							   .Append($", {nameof(X)}: ")
-							   .Append(X.ToString(format, formatProvider))
-							   .Append($", {nameof(Y)}: ")
-							   .Append(Y.ToString(format, formatProvider))
-							   .Append($", {nameof(DX)}: ")
-							   .Append(DX.ToString(format, formatProvider))
-							   .Append($", {nameof(DY)}: ")
-							   .Append(DY.ToString(format, formatProvider))
-							   .Append($", {nameof(Pressure)}: ")
-							   .Append(Pressure.ToString(format, formatProvider))
-							   .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(TouchDeviceId)}: {mTouchId.ToString(format, formatProvider)}, {
+			nameof(FingerId)}: {mFingerId.ToString(format, formatProvider)}, {
+			nameof(X)}: {mX.ToString(format, formatProvider)}, {
+			nameof(Y)}: {mY.ToString(format, formatProvider)}, {
+			nameof(DeltaX)}: {mDx.ToString(format, formatProvider)}, {
+			nameof(DeltaY)}: {mDy.ToString(format, formatProvider)}, {
+			nameof(Pressure)}: {mPressure.ToString(format, formatProvider)}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -255,50 +236,23 @@ public struct TouchFingerEvent : ICommonEvent<TouchFingerEvent>, IFormattable, I
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
-			&& SpanFormat.TryWrite($", {nameof(TouchId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(TouchId, ref destination, ref charsWritten, format, provider)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite($", {nameof(TouchDeviceId)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mTouchId, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(FingerId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(FingerId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mFingerId, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(X)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(X, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mX, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Y)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Y, ref destination, ref charsWritten, format, provider)
-			&& SpanFormat.TryWrite($", {nameof(DX)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(DX, ref destination, ref charsWritten, format, provider)
-			&& SpanFormat.TryWrite($", {nameof(DY)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(DY, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mY, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite($", {nameof(DeltaX)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mDx, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite($", {nameof(DeltaY)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mDy, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Pressure)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Pressure, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mPressure, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in TouchFingerEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.FingerDown"/>, <see cref="EventType.FingerUp"/>, <see cref="EventType.FingerMotion"/>, or <see cref="EventType.FingerCanceled"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.FingerDown"/>, <see cref="EventType.FingerUp"/>, <see cref="EventType.FingerMotion"/>, nor <see cref="EventType.FingerCanceled"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator TouchFingerEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotTouchFingerEvent();
-		}
-
-		return @event.TFinger;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotTouchFingerEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(TouchFingerEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

@@ -8,27 +8,12 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal JoyAxisEvent JAxis;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="JoyAxisEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="JoyAxisEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in JoyAxisEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> JAxis = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a joystick axis changes position
+/// Represents an event that occurs when a joystick axis changes
 /// </summary>
 /// <remarks>
 /// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.JoystickAxisMotion"/></description></item>
 /// </list>
@@ -36,19 +21,10 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct JoyAxisEvent : ICommonEvent<JoyAxisEvent>, IFormattable, ISpanFormattable
+public partial struct JoyAxisEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.JoystickAxisMotion;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<JoyAxisEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref JoyAxisEvent ICommonEvent<JoyAxisEvent>.GetReference(ref Event @event) => ref @event.JAxis;
 
 	private CommonEvent mCommon;
 	private uint mWhich;
@@ -57,31 +33,25 @@ public struct JoyAxisEvent : ICommonEvent<JoyAxisEvent>, IFormattable, ISpanForm
 	private short mValue;
 	private readonly ushort mPadding4;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.JoystickAxisMotion"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.JoystickAxisMotion"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="JoyAxisEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(JoyAxisEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(JoyAxisEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -93,16 +63,18 @@ public struct JoyAxisEvent : ICommonEvent<JoyAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the joystick device ID for the <see cref="Joystick"/> associated with the event
+	/// Gets or sets the <see cref="Joystick.Id">ID</see> of the <see cref="Input.Joystick"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The joystick device ID for the <see cref="Joystick"/> associated with the event
+	/// The <see cref="Joystick.Id">ID</see> of the <see cref="Input.Joystick"/> associated with this event
 	/// </value>
 	public uint JoystickId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
+
+	// TODO: Add a `Joystick` property once the `Joystick` type is implemented
 
 	/// <summary>
 	/// Gets or sets the axis index for the joystick axis that changed
@@ -117,10 +89,10 @@ public struct JoyAxisEvent : ICommonEvent<JoyAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the value for the axis that changed
+	/// Gets or sets the value for the <see cref="Axis"/> that changed
 	/// </summary>
 	/// <value>
-	/// The value for the axis that changed, in the range from <see cref="short.MinValue"/> to <see cref="short.MaxValue"/>
+	/// The value for the <see cref="Axis"/> that changed, in the range from <c><see cref="short.MinValue"/></c> to <c><see cref="short.MaxValue"/></c>
 	/// </value>
 	public short Value
 	{
@@ -139,25 +111,10 @@ public struct JoyAxisEvent : ICommonEvent<JoyAxisEvent>, IFormattable, ISpanForm
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(JoystickId)}: ")
-							   .Append(JoystickId.ToString(format, formatProvider))
-							   .Append($", {nameof(Axis)}: ")
-							   .Append(Axis.ToString(format, formatProvider))
-							   .Append($", {nameof(Value)}: ")
-							   .Append(Value.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(JoystickId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(Axis)}: {mAxis.ToString(format, formatProvider)}, {
+			nameof(Value)}: {mValue.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -165,40 +122,13 @@ public struct JoyAxisEvent : ICommonEvent<JoyAxisEvent>, IFormattable, ISpanForm
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(JoystickId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(JoystickId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Axis)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Axis, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mAxis, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Value)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Value, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mValue, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in JoyAxisEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.JoystickAxisMotion"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.JoystickAxisMotion"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator JoyAxisEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotJoyAxisEvent();
-		}
-
-		return @event.JAxis;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotJoyAxisEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(JoyAxisEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

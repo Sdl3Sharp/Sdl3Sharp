@@ -20,15 +20,18 @@ partial class Window
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
 	private static unsafe CBool EventWatchResizeOrDestroy(void* userdata, Event* @event)
 	{
-		if (Unsafe.AsRef<Event>(@event).TryAsReadOnly<WindowEvent>(out var windowEventRef))
+		// This is really not how you should handle events, and not at all a "standard" example.
+		// But this event watch gets called for every event and each window registers its own event watch, so we really care for performance here.
+		// Just note that everything that looks like code smell in this method is almost certainly a intentional performance optimization.
+		// The most important thing to note here is that we don't touch the given event except for dereferencing its type field. We don't (accidentally) copy it, nor do we extract event cases from it.
+		switch (@event->Type)
 		{
-			ref readonly var windowEvent = ref windowEventRef.GetReferenceOrNull();
-
-			if (userdata is not null && GCHandle.FromIntPtr(unchecked((IntPtr)userdata)) is { IsAllocated: true, Target: Window { Id: var windowId } window } && windowEvent.WindowId == windowId)
-			{
-				switch (windowEvent)
+			case EventType.WindowResized:
 				{
-					case { Type: EventType.WindowResized }:
+					// We don't check for the window ID here, because this event watch is registered per window.
+					// Also the duplicate code with EventType.WindowDestroyed is intentional, because of performance reasons.
+					if (userdata is not null && GCHandle.FromIntPtr(unchecked((IntPtr)userdata)) is { IsAllocated: true, Target: Window window })
+					{
 						// resizing the window invalidates the surfaces that's associated with it,
 						// so we dispose the existing associated WindowSurface, if any
 						// we don't destroy the surface, because SDL already did that while invalidating the surface after the resize
@@ -38,13 +41,20 @@ partial class Window
 							window.mSurface.Dispose();
 							window.mSurface = null;
 						}
-						break;
-
-					case { Type: EventType.WindowDestroyed }:
-						window.Dispose();
-						break;
+					}
 				}
-			}
+				break;
+
+			case EventType.WindowDestroyed:
+				{
+					// We don't check for the window ID here, because this event watch is registered per window.
+					// Also the duplicate code with EventType.WindowDestroyed is intentional, because of performance reasons.
+					if (userdata is not null && GCHandle.FromIntPtr(unchecked((IntPtr)userdata)) is { IsAllocated: true, Target: Window window })
+					{
+						window.Dispose();
+					}
+				}
+				break;
 		}
 
 		return default; // The return value doesn't matter in event watches, it's ignored by SDL

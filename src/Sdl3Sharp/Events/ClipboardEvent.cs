@@ -1,36 +1,21 @@
 ﻿using Sdl3Sharp.Internal;
 using Sdl3Sharp.Internal.Interop;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal ClipboardEvent Clipboard;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="ClipboardEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="ClipboardEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in ClipboardEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Clipboard = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when the contents of the clipboard have changed
+/// Represents an event that occurs when the <see cref="Clipboard"/> is updated
 /// </summary>
 /// <remarks>
 /// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.ClipboardUpdated"/></description></item>
 /// </list>
@@ -38,50 +23,35 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct ClipboardEvent : ICommonEvent<ClipboardEvent>, IFormattable, ISpanFormattable
+public partial struct ClipboardEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.ClipboardUpdated;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<ClipboardEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref ClipboardEvent ICommonEvent<ClipboardEvent>.GetReference(ref Event @event) => ref @event.Clipboard;
+	private readonly string DebuggerDisplay => ToString();
 
 	private CommonEvent mCommon;
 	private CBool mOwner;
-	private int mNumMimeTypes;
-	private unsafe byte** mMimeTypes;
+	private readonly int mNumMimeTypes; // Since `mMimeTypes` is readonly, this field is also should be readonly as well.
+	private unsafe readonly byte** mMimeTypes; // There's no safe way to set this field from the managed side, that's why it's readonly.
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.ClipboardUpdated"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.ClipboardUpdated"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="ClipboardEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(ClipboardEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(ClipboardEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -93,10 +63,10 @@ public struct ClipboardEvent : ICommonEvent<ClipboardEvent>, IFormattable, ISpan
 	}
 
 	/// <summary>
-	/// Gets or sets a value indicating whether SDL "owns" the clipboard, meaning it's an internal update event
+	/// Gets or sets a value indicating whether SDL "owns" the clipboard (e.g., the clipboard update is internal one)
 	/// </summary>
 	/// <value>
-	/// A value indicating whether SDL "owns" the clipboard, meaning it's an internal update event
+	/// A value indicating whether SDL "owns" the clipboard (e.g., the clipboard update is internal one)
 	/// </value>
 	public bool IsOwned
 	{
@@ -105,142 +75,132 @@ public struct ClipboardEvent : ICommonEvent<ClipboardEvent>, IFormattable, ISpan
 	}
 
 	/// <summary>
-	/// Gets a list of currently available mime types
+	/// Gets the MIME types of the data currently on the clipboard
 	/// </summary>
 	/// <value>
-	/// A list of currently available mime types
+	/// The MIME types of the data currently on the clipboard
 	/// </value>
 	/// <remarks>
 	/// <para>
 	/// Reading this property can be very expensive, you should consider caching it's value.
 	/// </para>
-	/// <para>
-	/// Setting this property is not supported and will lead the property to throw a <see cref="NotSupportedException"/>.
-	/// </para>
 	/// </remarks>
-	/// <exception cref="NotSupportedException">When setting this property</exception>
-	public string[] MimeTypes
+	public readonly string[] MimeTypes
 	{
-		readonly get
+		get
 		{
 			unsafe
 			{
-				var mimeTypes = mMimeTypes;
-				var numMimeTypes = mNumMimeTypes;
+				var mimeTypesPtr = mMimeTypes;
 
-				if (mimeTypes is null || numMimeTypes is not > 0)
+				if (mimeTypesPtr is null || mNumMimeTypes is not > 0)
 				{
 					return [];
 				}
 
-				var result = GC.AllocateUninitializedArray<string>(numMimeTypes);
+				var mimeTypes = GC.AllocateUninitializedArray<string>(mNumMimeTypes);
 
-				foreach (ref var mimeType in result.AsSpan())
+				foreach (ref var mimeType in mimeTypes.AsSpan())
 				{
-					mimeType = Utf8StringMarshaller.ConvertToManaged(*mimeTypes++)!;
+					using var mimeTypeUtf16 = NativeStrings.FromUtf8ToUtf16(*mimeTypesPtr++);
+					mimeType = mimeTypeUtf16.ToManaged()!;
 				}
 
-				return result;
+				return mimeTypes;
 			}
 		}
-
-		[Obsolete($"Setting {nameof(MimeTypes)} is not supported yet.")]
-		[DoesNotReturn]
-		set => throw new NotSupportedException($"Setting {nameof(MimeTypes)} is not supported");
 	}
 
 	/// <inheritdoc/>
-	public readonly override string ToString() => ToString(format: default, formatProvider: default);
-
-	/// <inheritdoc cref="IFormattable.ToString(string?, IFormatProvider?)"/>
-	public readonly string ToString(IFormatProvider? formatProvider) => ToString(format: default, formatProvider);
-
-	/// <inheritdoc cref="IFormattable.ToString(string?, IFormatProvider?)"/>
-	public readonly string ToString(string? format) => ToString(format, formatProvider: default);
-
-	/// <inheritdoc/>
-	public readonly string ToString(string? format, IFormatProvider? formatProvider)
+	public readonly override string ToString()
 	{
 		unsafe
 		{
-			var builder = Shared.StringBuilder;
-			try
-			{
-				ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							.Append($", {nameof(IsOwned)}: ")
-							.Append(IsOwned)
-							.Append($", {nameof(MimeTypes)}: [");
-
-				var mimeTypes = mMimeTypes;
-				var mimeTypesEnd = mimeTypes + mNumMimeTypes;
-
-				if (mimeTypes is not null && mimeTypes < mimeTypesEnd)
-				{
-					builder.Append(" \"")
-						   .Append(Utf8StringMarshaller.ConvertToManaged(*mimeTypes++)!)
-						   .Append('"');
-
-					while (mimeTypes < mimeTypesEnd)
-					{
-						builder.Append(" \"")
-							   .Append(Utf8StringMarshaller.ConvertToManaged(*mimeTypes++)!)
-							   .Append('"');
-					}
-
-					builder.Append(' ');
-				}
-
-				return builder.Append("] }")
-							  .ToString();
-			}
-			finally
-			{
-				builder.Clear();
-			}
+			return $"{{ {mCommon.ToPartialString()}, {
+				nameof(IsOwned)}: {(bool)mOwner}, {
+				nameof(MimeTypes)}: [{(mNumMimeTypes is > 0 ? $" {string.Join(", ", NativeStrings.EnumerateFromUtf8ToUtf16(mMimeTypes, mNumMimeTypes).Select(static c => c is not null ? $"\"{c}\"" : "null"))} " : string.Empty)}] }}";
 		}
 	}
 
 	/// <inheritdoc/>
-	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
+	readonly string IFormattable.ToString(string? format, IFormatProvider? formatProvider) => ToString();
+
+	/// <inheritdoc cref="ISpanFormattable.TryFormat(Span{char}, out int, ReadOnlySpan{char}, IFormatProvider?)"/>
+	public readonly bool TryFormat(Span<char> destination, out int charsWritten)
 	{
 		unsafe
 		{
 			charsWritten = 0;
 
 			if ( !(SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-				&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+				&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite($", {nameof(IsOwned)}: ", ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite(IsOwned, ref destination, ref charsWritten)
+				&& SpanFormat.TryWrite((bool)mOwner, ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite($", {nameof(MimeTypes)}: [", ref destination, ref charsWritten)))
 			{
 				return false;
 			}
 
-			var mimeTypes = mMimeTypes;
-			var mimeTypesEnd = mimeTypes + mNumMimeTypes;
-
-			if (mimeTypes is not null && mimeTypes < mimeTypesEnd)
+			if (mMimeTypes is not null && mNumMimeTypes is > 0)
 			{
-				if ( !(SpanFormat.TryWrite(" \"", ref destination, ref charsWritten)
-					&& SpanFormat.TryWriteUtf8(MemoryMarshal.CreateReadOnlySpanFromNullTerminated(*mimeTypes++), ref destination, ref charsWritten)
-					&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+				if (!SpanFormat.TryWrite(' ', ref destination, ref charsWritten))
 				{
 					return false;
 				}
 
-				while (mimeTypes < mimeTypesEnd)
+				var mimeTypesPtr = mMimeTypes;
+
 				{
-					if ( !(SpanFormat.TryWrite(" \"", ref destination, ref charsWritten)
-						&& SpanFormat.TryWriteUtf8(MemoryMarshal.CreateReadOnlySpanFromNullTerminated(*mimeTypes++), ref destination, ref charsWritten)
-						&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+					using var mimeTypeUtf16 = NativeStrings.FromUtf8ToUtf16(*mimeTypesPtr++);
+					
+					if (mimeTypeUtf16.Buffer is not null)
+					{
+						if ( !(SpanFormat.TryWrite('"', ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite(mimeTypeUtf16.AsSpan(), ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+						{
+							return false;
+						}
+					}
+					else
+					{
+						if (!SpanFormat.TryWrite("null", ref destination, ref charsWritten))
+						{
+							return false;
+						}
+					}
+				}
+
+				for (var i = 1; i < mNumMimeTypes; i++)
+				{
+					if (!SpanFormat.TryWrite(", ", ref destination, ref charsWritten))
 					{
 						return false;
+					}
+
+					using var mimeTypeUtf16 = NativeStrings.FromUtf8ToUtf16(*mimeTypesPtr++);
+
+					if (mimeTypeUtf16.Buffer is not null)
+					{
+						if ( !(SpanFormat.TryWrite('"', ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite(mimeTypeUtf16.AsSpan(), ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+						{
+							return false;
+						}
+					}
+					else
+					{
+						if (!SpanFormat.TryWrite("null", ref destination, ref charsWritten))
+						{
+							return false;
+						}
 					}
 				}
 
 				if (!SpanFormat.TryWrite(' ', ref destination, ref charsWritten))
 				{
-					return false; 
+					return false;
 				}
 			}
 
@@ -249,29 +209,5 @@ public struct ClipboardEvent : ICommonEvent<ClipboardEvent>, IFormattable, ISpan
 	}
 
 	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in ClipboardEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.ClipboardUpdated"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.ClipboardUpdated"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator ClipboardEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotClipboardEvent();
-		}
-
-		return @event.Clipboard;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotClipboardEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(ClipboardEvent)} by {nameof(Type)}", paramName: nameof(@event));
-	}
+	readonly bool ISpanFormattable.TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider) => TryFormat(destination, out charsWritten);
 }

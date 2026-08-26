@@ -1,5 +1,6 @@
 ﻿using Sdl3Sharp.Input;
 using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -9,50 +10,26 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal PenAxisEvent PAxis;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="PenAxisEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="PenAxisEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in PenAxisEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> PAxis = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a pen axis changes
+/// Represents an event that occurs when a <see cref="Input.Pen"/> axis (angle, pressure, etc.) changes
 /// </summary>
 /// <remarks>
 /// <para>
-/// You might get some of these events even if the pen isn't touching the tablet.
+/// Associated <see cref="EventType"/>:
+/// <list type="bullet">
+/// <item><description><see cref="EventType.PenAxis"/></description></item>
+/// </list>
 /// </para>
 /// <para>
-/// Associated <see cref="EventType"/>s:
-/// <list type="bullet">
-/// <item><description><see cref="EventType.PenAxisChanged"/></description></item>
-/// </list>
+/// SDL might even send these events when the pen is not touching a surface.
 /// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanFormattable
+public partial struct PenAxisEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.PenAxisChanged;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<PenAxisEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref PenAxisEvent ICommonEvent<PenAxisEvent>.GetReference(ref Event @event) => ref @event.PAxis;
 
 	private CommonEvent mCommon;
 	private uint mWindowID;
@@ -63,31 +40,25 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	private PenAxis mAxis;
 	private float mValue;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.PenAxisChanged"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.PenAxisChanged"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="PenAxisEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(PenAxisEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(PenAxisEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -99,11 +70,16 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with pen focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with pen focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="PenAxisEvent"/> is most likely the window that currently has pen focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
@@ -111,10 +87,32 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the pen instance ID for the <see cref="Pen"/> associated with the event
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The pen instance ID for the <see cref="Pen"/> associated with the event
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="PenAxisEvent"/> is most likely the window that currently has pen focus, if any.
+	/// </para>
+	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Pen.Id">ID</see> of the <see cref="Input.Pen"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Pen.Id">ID</see> of the <see cref="Input.Pen"/> associated with this event
 	/// </value>
 	public uint PenId
 	{
@@ -122,11 +120,13 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
 
+	// TODO: Add a `Pen` property once the `Pen` type is implemented
+
 	/// <summary>
-	/// Gets or sets the state of the pen input at the time of the event
+	/// Gets or sets the state of the <see cref="Pen"/> at the time of this event
 	/// </summary>
 	/// <value>
-	/// The state of the pen input at the time of the event
+	/// The state of the <see cref="Pen"/> at the time of this event
 	/// </value>
 	public PenInputFlags PenState
 	{
@@ -135,10 +135,10 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the X coordinate of the pen touch
+	/// Gets or sets the horizontal coordinate of the pen
 	/// </summary>
 	/// <value>
-	/// The X coordinate of the pen touch, relative to the <see cref="Window"/> specified through <see cref="WindowId"/>
+	/// The horizontal coordinate of the pen, relative to the <see cref="Window"/>, if any
 	/// </value>
 	public float X
 	{
@@ -147,10 +147,10 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the Y coordinate of the pen touch
+	/// Gets or sets the vertical coordinate of the pen
 	/// </summary>
 	/// <value>
-	/// The Y coordinate of the pen touch, relative to the <see cref="Window"/> specified through <see cref="WindowId"/>
+	/// The vertical coordinate of the pen, relative to the <see cref="Window"/>, if any
 	/// </value>
 	public float Y
 	{
@@ -159,19 +159,11 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the pen axis that changed
+	/// Gets or sets the gamepad axis that changed
 	/// </summary>
 	/// <value>
-	/// The pen axis that changed
+	/// The gamepad axis that changed
 	/// </value>
-	/// <remarks>
-	/// <para>
-	/// To get the value associated with the changed axis, use the <see cref="Value"/> property.
-	/// </para>
-	/// <para>
-	/// See the <see cref="PenAxis"/> enumeration for more information about the possible axes and their meanings.
-	/// </para>
-	/// </remarks>
 	public PenAxis Axis
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mAxis;
@@ -179,16 +171,12 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 	}
 
 	/// <summary>
-	/// Gets or sets the value for the axis specified through <see cref="Axis"/>
+	/// Gets or sets the value for the <see cref="Axis"/> that changed
 	/// </summary>
 	/// <value>
-	/// The value for the axis specified through <see cref="Axis"/>
+	/// The value for the <see cref="Axis"/> that changed.
+	/// The allowed range and meaning of this value depends on the kind of <see cref="Axis"/> that changed, please refer to the <see cref="PenAxis"/> documentation for more information about the values for each kind of axis.
 	/// </value>
-	/// <remarks>
-	/// <para>
-	/// See the <see cref="PenAxis"/> enumeration for more information about the possible axes and their meanings.
-	/// </para>
-	/// </remarks>
 	public float Value
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mValue;
@@ -206,33 +194,14 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append($", {nameof(PenId)}: ")
-							   .Append(PenId.ToString(format, formatProvider))
-							   .Append($", {nameof(PenState)}: ")
-							   .Append(PenState)
-							   .Append($", {nameof(X)}: ")
-							   .Append(X.ToString(format, formatProvider))
-							   .Append($", {nameof(Y)}: ")
-							   .Append(Y.ToString(format, formatProvider))
-							   .Append($", {nameof(Axis)}: ")
-							   .Append(Axis)
-							   .Append($", {nameof(Value)}: ")
-							   .Append(Value.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+			nameof(PenId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(PenState)}: {mPenState}, {
+			nameof(X)}: {mX.ToString(format, formatProvider)}, {
+			nameof(Y)}: {mY.ToString(format, formatProvider)}, {
+			nameof(Axis)}: {mAxis}, {
+			nameof(Value)}: {mValue.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -240,48 +209,21 @@ public struct PenAxisEvent : ICommonEvent<PenAxisEvent>, IFormattable, ISpanForm
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(PenId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(PenId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(PenState)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(PenState, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mPenState, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(X)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(X, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mX, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Y)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Y, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mY, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Axis)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Axis, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mAxis, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(Value)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Value, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mValue, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in PenAxisEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.PenAxisChanged"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.PenAxisChanged"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator PenAxisEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotPenAxisEvent();
-		}
-
-		return @event.PAxis;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotPenAxisEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(PenAxisEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

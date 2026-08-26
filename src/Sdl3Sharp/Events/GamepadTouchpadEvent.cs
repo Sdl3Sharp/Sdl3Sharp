@@ -8,23 +8,8 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal GamepadTouchpadEvent GTouchpad;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="GamepadTouchpadEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="GamepadTouchpadEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in GamepadTouchpadEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> GTouchpad = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a finger interacts with a gamepad touchpad
+/// Represents an event that occurs when a finger touches or moves on a touchpad of a gamepad
 /// </summary>
 /// <remarks>
 /// <para>
@@ -38,19 +23,10 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct GamepadTouchpadEvent : ICommonEvent<GamepadTouchpadEvent>, IFormattable, ISpanFormattable
+public partial struct GamepadTouchpadEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is >= EventType.GamepadTouchpadDown and <= EventType.GamepadTouchpadUp;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<GamepadTouchpadEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref GamepadTouchpadEvent ICommonEvent<GamepadTouchpadEvent>.GetReference(ref Event @event) => ref @event.GTouchpad;
 
 	private CommonEvent mCommon;
 	private uint mWhich;
@@ -60,31 +36,25 @@ public struct GamepadTouchpadEvent : ICommonEvent<GamepadTouchpadEvent>, IFormat
 	private float mY;
 	private float mPressure;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.GamepadTouchpadDown"/>, <see cref="EventType.GamepadTouchpadMotion"/>, or <see cref="EventType.GamepadTouchpadUp"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.GamepadTouchpadDown"/>, <see cref="EventType.GamepadTouchpadMotion"/>, nor <see cref="EventType.GamepadTouchpadUp"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="GamepadTouchpadEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(GamepadTouchpadEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(GamepadTouchpadEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -96,16 +66,20 @@ public struct GamepadTouchpadEvent : ICommonEvent<GamepadTouchpadEvent>, IFormat
 	}
 
 	/// <summary>
-	/// Gets or sets the joystick device ID for the <see cref="Gamepad"/> associated with the event
+	/// Gets or sets the <see cref="Joystick.Id">ID</see> of the <see cref="Input.Gamepad"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The joystick device ID for the <see cref="Gamepad"/> associated with the event
+	/// The <see cref="Joystick.Id">ID</see> of the <see cref="Input.Gamepad"/> associated with this event
 	/// </value>
-	public uint JoystickId
+	public uint GamepadId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
+
+	// TODO: Add a `Gamepad` property once the `Gamepad` type is implemented
+	// Important note: `Gamepad`s are also `Joystick`s, but not all `Joystick`s are `Gamepad`s. This suggests that `Gamepad` should be a subclass of `Joystick`.
+	// Also, this implies that `Gamepad` also use `Joystick` IDs, which is also what SDL does.
 
 	/// <summary>
 	/// Gets or sets the index of the touchpad on the gamepad
@@ -132,39 +106,84 @@ public struct GamepadTouchpadEvent : ICommonEvent<GamepadTouchpadEvent>, IFormat
 	}
 
 	/// <summary>
-	/// Gets or sets the X position of the finger on the touchpad
+	/// Gets or sets the horizontal position of the finger on the touchpad
 	/// </summary>
 	/// <value>
-	/// The X position of the finger on the touchpad, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the left edge and <c>1</c> is the right edge
+	/// The horizontal position of the finger on the touchpad, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the left edge and <c>1</c> is the right edge
 	/// </value>
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the given value is less than <c>0</c> or greater than <c>1</c>
+	/// </exception>
 	public float X
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mX;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mX = value;
+		
+		set
+		{
+			if (value is < 0f or > 1f)
+			{
+				[DoesNotReturn]
+				static void failInvalidX(float x) => throw new ArgumentOutOfRangeException(nameof(value), x, $"The {nameof(X)} property must be between 0 and 1, inclusive.");
+
+				failInvalidX(value);
+			}
+
+			mX = value;
+		}
 	}
 
 	/// <summary>
-	/// Gets or sets the Y position of the finger on the touchpad
+	/// Gets or sets the vertical position of the finger on the touchpad
 	/// </summary>
 	/// <value>
-	/// The Y position of the finger on the touchpad, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the top edge and <c>1</c> is the bottom edge
+	/// The vertical position of the finger on the touchpad, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the top edge and <c>1</c> is the bottom edge
 	/// </value>
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the given value is less than <c>0</c> or greater than <c>1</c>
+	/// </exception>
 	public float Y
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mY;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mY = value;
+
+		set
+		{
+			if (value is < 0f or > 1f)
+			{
+				[DoesNotReturn]
+				static void failInvalidY(float y) => throw new ArgumentOutOfRangeException(nameof(value), y, $"The {nameof(Y)} property must be between 0 and 1, inclusive.");
+
+				failInvalidY(value);
+			}
+
+			mY = value;
+		}
 	}
 
 	/// <summary>
 	/// Gets or sets the pressure of the finger applied on the touchpad
 	/// </summary>
 	/// <value>
-	/// The pressure of the finger applied on the touchpad, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is no pressure and <c>1</c> is maximum pressure
+	/// The pressure the finger applies on the touchpad, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is no pressure and <c>1</c> is maximum pressure
 	/// </value>
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the given value is less than <c>0</c> or greater than <c>1</c>
+	/// </exception>
 	public float Pressure
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mPressure;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mPressure = value;
+
+		set
+		{
+			if (value is < 0f or > 1f)
+			{
+				[DoesNotReturn]
+				static void failInvalidPressure(float pressure) => throw new ArgumentOutOfRangeException(nameof(value), pressure, $"The {nameof(Pressure)} property must be between 0 and 1, inclusive.");
+
+				failInvalidPressure(value);
+			}
+
+			mPressure = value;
+		}
 	}
 
 	/// <inheritdoc/>
@@ -178,31 +197,13 @@ public struct GamepadTouchpadEvent : ICommonEvent<GamepadTouchpadEvent>, IFormat
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(JoystickId)}: ")
-							   .Append(JoystickId.ToString(format, formatProvider))
-							   .Append($", {nameof(Touchpad)}: ")
-							   .Append(Touchpad.ToString(format, formatProvider))
-							   .Append($", {nameof(Finger)}: ")
-							   .Append(Finger.ToString(format, formatProvider))
-							   .Append($", {nameof(X)}: ")
-							   .Append(X.ToString(format, formatProvider))
-							   .Append($", {nameof(Y)}: ")
-							   .Append(Y.ToString(format, formatProvider))
-							   .Append($", {nameof(Pressure)}: ")
-							   .Append(Pressure.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(GamepadId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(Touchpad)}: {mTouchpad.ToString(format, formatProvider)}, {
+			nameof(Finger)}: {mFinger.ToString(format, formatProvider)}, {
+			nameof(X)}: {mX.ToString(format, formatProvider)}, {
+			nameof(Y)}: {mY.ToString(format, formatProvider)}, {
+			nameof(Pressure)}: {mPressure.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -210,46 +211,19 @@ public struct GamepadTouchpadEvent : ICommonEvent<GamepadTouchpadEvent>, IFormat
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
-			&& SpanFormat.TryWrite($", {nameof(JoystickId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(JoystickId, ref destination, ref charsWritten, format, provider)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite($", {nameof(GamepadId)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Touchpad)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Touchpad, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mTouchpad, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Finger)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Finger, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mFinger, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(X)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(X, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mX, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Y)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Y, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mY, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Pressure)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Pressure, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mPressure, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in GamepadTouchpadEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.GamepadTouchpadDown"/>, <see cref="EventType.GamepadTouchpadMotion"/>, or <see cref="EventType.GamepadTouchpadUp"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.GamepadTouchpadDown"/>, <see cref="EventType.GamepadTouchpadMotion"/>, nor <see cref="EventType.GamepadTouchpadUp"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator GamepadTouchpadEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotGamepadTouchpadEvent();
-		}
-
-		return @event.GTouchpad;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotGamepadTouchpadEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(GamepadTouchpadEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

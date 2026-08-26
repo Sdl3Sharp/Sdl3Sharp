@@ -1,0 +1,71 @@
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+namespace Sdl3Sharp.Events;
+
+partial struct Event
+{
+#if NET11_0_OR_GREATER
+	partial interface IUnionMembers
+	{
+		/// <summary>
+		/// Creates a new instance of the union type from the given value
+		/// </summary>
+		/// <param name="value">The value to create the union type from</param>
+		/// <returns>The new instance of the union type created from the given value</returns>
+		static abstract Event Create(in UserEvent value);
+
+		/// <summary>
+		/// Tries to get the value of the union type as the given type
+		/// </summary>
+		/// <param name="value">The value of the union type as the given type, if the union type is of that type</param>
+		/// <returns><c><see langword="true"/></c>, if the union type is of the given type and the value was successfully retrieved; otherwise, <c><see langword="false"/></c></returns>
+		/// <remarks>
+		/// <para>
+		/// In the case of the <see cref="Event"/> union type, this method will leave <paramref name="value"/> uninitialized if it returns <c><see langword="false"/></c>.
+		/// It is the caller's responsibility to ensure that <paramref name="value"/> is not used in that case.
+		/// </para>
+		/// </remarks>
+		bool TryGetValue(out UserEvent value);
+	}
+#endif
+
+	// The code for `UnmanagedUserEvent` already defines the `User` field, we just going to reuse for the `UserEvent` type
+	//[FieldOffset(0)] internal UnmanagedUserEvent User;
+
+#if NET11_0_OR_GREATER
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	static Event IUnionMembers.Create(in UserEvent value) => From(in value);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	readonly bool IUnionMembers.TryGetValue(out UserEvent value) => TryGet(out value);
+#endif
+}
+
+partial class UserEvent : IEvent<UserEvent>
+{
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	static bool IEvent<UserEvent>.TryReadFromEvent(ref readonly Event @event, [NotNullWhen(true)] out UserEvent? result)
+	{
+		unsafe
+		{
+#pragma warning disable CS0618 // We can use them here, that's what they're there for
+			if (@event.Type is >= EventType.User and <= EventType.Last // Is that event an user event? (this is the same check as `UnmanagedUserEvent` does)
+#pragma warning restore CS0618
+				&& @event.User.Data1 is not null and var handle	&& GCHandle.FromIntPtr(unchecked((IntPtr)handle)) is { IsAllocated: true, Target: UserEvent userEvent } // Is that event not only an user event, but actually a managed user event?
+			)
+			{
+				result = userEvent;
+				return true;
+			}
+
+			result = null;
+			return false;
+		}
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	void IEvent<UserEvent>.WriteToEvent(ref Event @event) => @event.User = mUnmanaged;
+}

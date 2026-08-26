@@ -1,54 +1,47 @@
 ﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Timing;
 using System;
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal CommonEvent Common;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="CommonEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="CommonEvent"/> to store into the newly created <see cref="Event"/></param>
-	internal Event(in CommonEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Common = @event;
-}
-
 /// <summary>
-/// Represents commonly shared properties by all of SDL's *Event structures
+/// Represents an event structure that contains commonly shared properties by all other event structures.
+/// This structure is an event of its own, but can also be viewed as a foundation for other event structures.
 /// </summary>
-/// <remarks>
+/// <remarks> 
 /// <para>
-/// Note: This isn't real event; it's just a basic implementation of <see cref="ICommonEvent"/> used by most over *Event structures.
+/// Associated <see cref="EventType"/>s:
+/// <list type="bullet">
+/// <item><description><see cref="EventType.Terminating"/></description></item>
+/// <item><description><see cref="EventType.LowMemory"/></description></item>
+/// <item><description><see cref="EventType.WillEnterBackground"/></description></item>
+/// <item><description><see cref="EventType.DidEnterBackground"/></description></item>
+/// <item><description><see cref="EventType.WillEnterForeground"/></description></item>
+/// <item><description><see cref="EventType.DidEnterForeground"/></description></item>
+/// <item><description><see cref="EventType.LocaleChanged"/></description></item>
+/// <item><description><see cref="EventType.SystemThemeChanged"/></description></item>
+/// <item><description><see cref="EventType.KeymapChanged"/></description></item>
+/// <item><description><see cref="EventType.ScreenKeyboardShown"/></description></item>
+/// <item><description><see cref="EventType.ScreenKeyboardHidden"/></description></item>
+/// </list>
 /// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-internal struct CommonEvent : ICommonEvent<CommonEvent>, IFormattable, ISpanFormattable
+public partial struct CommonEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<CommonEvent>.Accepts(EventType type) => true; // CommonEvent accepts all EventTypes
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref CommonEvent ICommonEvent<CommonEvent>.GetReference(ref Event @event) => ref @event.Common;
+	private readonly string DebuggerDisplay => ToString();
 
 	private EventType mType;
 	private readonly uint mReserved;
 	private ulong mTimestamp;
 
 	/// <inheritdoc/>
-	public EventType Type
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mType;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mType = value;
@@ -61,46 +54,66 @@ internal struct CommonEvent : ICommonEvent<CommonEvent>, IFormattable, ISpanForm
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTimestamp = value;
 	}
 
-	/// <inheritdoc/>
-	public readonly override string ToString() => ToString(format: default, formatProvider: default);
-
-	/// <inheritdoc cref="IFormattable.ToString(string?, IFormatProvider?)"/>
-	public readonly string ToString(IFormatProvider? formatProvider) => ToString(format: default, formatProvider);
-
-	/// <inheritdoc cref="IFormattable.ToString(string?, IFormatProvider?)"/>
-	public readonly string ToString(string? format) => ToString(format, formatProvider: default);
-
-	/// <inheritdoc/>
-	public readonly string ToString(string? format, IFormatProvider? formatProvider)
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	private static void DeconstructTimestamp(ulong timestamp, out ulong hours, out ulong minutes, out ulong seconds, out ulong milliseconds, out ulong nanoseconds)
 	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
+		(timestamp, nanoseconds) = ulong.DivRem(timestamp, Time.NanosecondsPerMillisecond);
+		(timestamp, milliseconds) = ulong.DivRem(timestamp, Time.MillisecondsPerSecond);
+		(timestamp, seconds) = ulong.DivRem(timestamp, 60 /* seconds per minute */);
+		(timestamp, minutes) = ulong.DivRem(timestamp, 60 /* minutes per hour */);
+		hours = timestamp; // hours is the most significant unit of our timestamp deconstruction
 	}
 
+	internal static string FormatTimestamp(ulong timestamp)
+	{
+		DeconstructTimestamp(timestamp, out var hours, out var minutes, out var seconds, out var milliseconds, out var nanoseconds);
+
+		return $"{hours:0}h {minutes:00}min {seconds:00}s {milliseconds:000}ms {nanoseconds:000000}ns";
+	}
+
+	internal static bool TryFormatTimestamp(ulong timestamp, ref Span<char> destination, ref int charsWritten)
+	{
+		DeconstructTimestamp(timestamp, out var hours, out var minutes, out var seconds, out var milliseconds, out var nanoseconds);
+
+		return SpanFormat.TryWrite(hours, ref destination, ref charsWritten, format: "0")
+			&& SpanFormat.TryWrite("h ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(minutes, ref destination, ref charsWritten, format: "00")
+			&& SpanFormat.TryWrite("min ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(seconds, ref destination, ref charsWritten, format: "00")
+			&& SpanFormat.TryWrite("s ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(milliseconds, ref destination, ref charsWritten, format: "000")
+			&& SpanFormat.TryWrite("ms ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(nanoseconds, ref destination, ref charsWritten, format: "000000")
+			&& SpanFormat.TryWrite("ns ", ref destination, ref charsWritten);
+	}
+
+	internal readonly string ToPartialString()
+		=> $"{nameof(Type)}: {mType}, {
+			nameof(Timestamp)}: {FormatTimestamp(mTimestamp)}";
+
+	internal readonly bool TryPartiallyFormat(ref Span<char> destination, ref int charsWritten)
+		=> SpanFormat.TryWrite($"{nameof(Type)}: ", ref destination, ref charsWritten)
+		&& SpanFormat.TryWrite(mType, ref destination, ref charsWritten)
+		&& SpanFormat.TryWrite($", {nameof(Timestamp)}: ", ref destination, ref charsWritten)
+		&& TryFormatTimestamp(mTimestamp, ref destination, ref charsWritten);
+
 	/// <inheritdoc/>
-	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
+	public readonly override string ToString()
+		=> $"{{ {ToPartialString()} }}";
+
+	/// <inheritdoc/>
+	readonly string IFormattable.ToString(string? format, IFormatProvider? formatProvider) => ToString();
+
+	/// <inheritdoc cref="ISpanFormattable.TryFormat(Span{char}, out int, ReadOnlySpan{char}, IFormatProvider?)"/>
+	public readonly bool TryFormat(Span<char> destination, out int charsWritten)
 	{
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 	}
 
 	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in CommonEvent @event) => new(in @event);
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static explicit operator CommonEvent(in Event @event) => @event.Common;
+	readonly bool ISpanFormattable.TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider) => TryFormat(destination, out charsWritten);
 }

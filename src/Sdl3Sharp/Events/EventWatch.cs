@@ -1,6 +1,4 @@
-﻿using Sdl3Sharp.Events;
-
-namespace Sdl3Sharp;
+﻿namespace Sdl3Sharp.Events;
 
 /// <summary>
 /// Represents a method that watches events as they are added to the event queue

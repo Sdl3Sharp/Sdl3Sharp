@@ -8,75 +8,44 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
+#if NET11_0_OR_GREATER
 /// <summary>
-/// Represents a general event in SDL
+/// Represents a common base type for event structures as an union type
 /// </summary>
 /// <remarks>
 /// <para>
-/// Even though SDL's *Event structures do not use inheritance (as they are all <c><see langword="struct"/></c>s or <see cref="ValueType"/>s),
-/// you may think of <see cref="Event"/> as a common base <em>representation</em> of all the other *Event structures.
-/// </para>
-/// <para>
-/// More specifically: all of the other *Event structures <em>can</em> be represented as an <see cref="Event"/>
-/// (this is usually achieved through <see cref="ICommonEvent{TSelf}.implicit operator Event(in TSelf)"/>),
-/// while an <see cref="Event"/> structure <em>could</em> potentially be represented as one of the *Event structures, depending on it's <see cref="Type"/>
-/// (this can be achieved through <see cref="ICommonEvent{TSelf}.explicit operator TSelf(in Event)"/>,
-/// or copyless through <see cref="EventExtensions.TryAs{TEvent}(ref Event, out Sdl3Sharp.Utilities.NullableRef{TEvent})"/> or <see cref="EventExtensions.TryAsReadOnly{TEvent}(ref readonly Event, out Sdl3Sharp.Utilities.NullableRefReadOnly{TEvent})"/>)
-/// </para>
-/// <para>
-/// Associated <see cref="EventType"/>s:
-/// <list type="bullet">
-/// <item><description><see cref="EventType.Terminating"/></description></item>
-/// <item><description><see cref="EventType.LowMemory"/></description></item>
-/// <item><description><see cref="EventType.WillEnterBackground"/></description></item>
-/// <item><description><see cref="EventType.DidEnterBackground"/></description></item>
-/// <item><description><see cref="EventType.WillEnterForeground"/></description></item>
-/// <item><description><see cref="EventType.DidEnterForeground"/></description></item>
-/// <item><description><see cref="EventType.LocaleChanged"/></description></item>
-/// <item><description><see cref="EventType.SystemThemeChanged"/></description></item>
-/// <item><description><see cref="EventType.KeymapChanged"/></description></item>
-/// <item><description><see cref="EventType.ScreenKeyboardShown"/></description></item>
-/// <item><description><see cref="EventType.ScreenKeyboardHidden"/></description></item>
-/// </list>
+/// You can use pattern matching (e.g., <c><see langword="switch"/></c>) or type checking (e.g., <c><see langword="is"/></c>) to determine the actual event type structure and access its specific properties.
+/// Alternatively, you can use the <see cref="TryGet{TEvent}(out TEvent)"/> and <see cref="From{TEvent}(in TEvent)"/> methods to check and convert between the union type and the specific event type structures.
 /// </para>
 /// </remarks>
+#else
+/// <summary>
+/// Represents a common base type for event type structures as an union type
+/// </summary>
+/// <remarks>
+/// <para>
+/// You can use the <see cref="TryGet{TEvent}(out TEvent)"/> and <see cref="From{TEvent}(in TEvent)"/> methods to check and convert between the union type and the specific event type structures.
+/// </para>
+/// </remarks>
+#endif
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Explicit)]
-public partial struct Event : ICommonEvent<Event>, IFormattable, ISpanFormattable
+public partial struct Event : IFormattable, ISpanFormattable
 {
-	internal interface IUnsafeConstructorDispatch;
-
 	[InlineArray(128)] private struct Padding { private byte _; }
 
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<Event>.Accepts(EventType type) => true; // Event accepts all EventTypes
+	[FieldOffset(0)] private EventType mType;
+	[FieldOffset(0)] private readonly Padding mPadding; // This makes sure the struct is (at least) 128 bytes in size, just like it's done in SDL's C counterpart `SDL_Event`.
+	                                                    // See the comment in the definition in https://wiki.libsdl.org/SDL3/SDL_Event for their explanation of why this is done that way.
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref Event ICommonEvent<Event>.GetReference(ref Event @event) => ref @event;
-
-	[FieldOffset(0)] private readonly Padding mPadding;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	internal Event(IUnsafeConstructorDispatch? _ = default) => Unsafe.SkipInit(out this);
-
-	/// <remarks>
-	/// <para>
-	/// Do not attempt to set this property on a base <see cref="Event"/>, instead set the <see cref="ICommonEvent.Type"/> property on an instance of a more specialized *Event structure.
-	/// Setting this property on a base <see cref="Event"/> is not supported and will lead the property to throw a <see cref="NotSupportedException"/>.
-	/// </para>
-	/// </remarks>
-	/// <exception cref="NotSupportedException">When setting this property</exception>
 	/// <inheritdoc/>
-	public EventType Type
+	public required EventType Type
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => Common.Type;
-
-		[Obsolete($"Setting the {nameof(Type)} of a base {nameof(Event)} is not supported.")]
-		[DoesNotReturn]
-		set => throw new NotSupportedException($"Setting the {nameof(Type)} of a base {nameof(Event)} is not supported");
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mType;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mType = value;
 	}
 
 	/// <inheritdoc/>
@@ -85,6 +54,39 @@ public partial struct Event : ICommonEvent<Event>, IFormattable, ISpanFormattabl
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => Common.Timestamp;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => Common.Timestamp = value;
 	}
+
+	/// <summary>
+	/// Creates a new <see cref="Event"/> from the given <typeparamref name="TEvent"/>
+	/// </summary>
+	/// <typeparam name="TEvent">The type of the event to create the <see cref="Event"/> from</typeparam>
+	/// <param name="event">The event to create the <see cref="Event"/> from</param>
+	/// <returns>A new <see cref="Event"/> representing the given <typeparamref name="TEvent"/></returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	public static Event From<TEvent>(in TEvent @event)
+		where TEvent : notnull, IEvent<TEvent>
+	{
+		Unsafe.SkipInit(out Event result);
+
+		@event.WriteToEvent(ref result);
+
+		return result;
+	}
+
+	/// <summary>
+	/// Tries to get a <typeparamref name="TEvent"/> from this <see cref="Event"/>, if this <see cref="Event"/> is of the correct type
+	/// </summary>
+	/// <typeparam name="TEvent">The type of the event to try to get from this <see cref="Event"/></typeparam>
+	/// <param name="event">The event to try to get from this <see cref="Event"/>, if this method returns <c><see langword="true"/></c>; otherwise, <c><see langword="null"/></c> or an uninitialized value</param>
+	/// <returns><c><see langword="true"/></c>, if this <see cref="Event"/> is of the correct type and the <paramref name="event"/> was successfully retrieved; otherwise, <c><see langword="false"/></c></returns>
+	/// <remarks>
+	/// <para>
+	/// Do <em>not</em> use the resulting <paramref name="event"/> if this method returns <c><see langword="false"/></c>, as it might be uninitialized and may contain invalid data.
+	/// </para>
+	/// </remarks>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	public readonly bool TryGet<TEvent>([NotNullWhen(true)] out TEvent? @event)
+		where TEvent : notnull, IEvent<TEvent>
+		=> TEvent.TryReadFromEvent(in this, out @event);
 
 	/// <inheritdoc/>
 	public readonly override string ToString() => ToString(format: default, formatProvider: default);
@@ -96,132 +98,158 @@ public partial struct Event : ICommonEvent<Event>, IFormattable, ISpanFormattabl
 	public readonly string ToString(string? format) => ToString(format, formatProvider: default);
 
 	/// <inheritdoc/>
-	public readonly string ToString(string? format, IFormatProvider? formatProvider) => 0 switch
-	{
-		_ when this.Is<QuitEvent>()                  => $"{nameof(QuitEvent)} {this.UnsafeAsReadOnly<QuitEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<DisplayEvent>()               => $"{nameof(DisplayEvent)} {this.UnsafeAsReadOnly<DisplayEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<WindowEvent>()                => $"{nameof(WindowEvent)} {this.UnsafeAsReadOnly<WindowEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<KeyboardEvent>()              => $"{nameof(KeyboardEvent)} {this.UnsafeAsReadOnly<KeyboardEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<TextEditingEvent>()           => $"{nameof(TextEditingEvent)} {this.UnsafeAsReadOnly<TextEditingEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<TextInputEvent>()             => $"{nameof(TextInputEvent)} {this.UnsafeAsReadOnly<TextInputEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<KeyboardDeviceEvent>()        => $"{nameof(KeyboardDeviceEvent)} {this.UnsafeAsReadOnly<KeyboardDeviceEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<TextEditingCandidatesEvent>() => $"{nameof(TextEditingCandidatesEvent)} {this.UnsafeAsReadOnly<TextEditingCandidatesEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<MouseMotionEvent>()           => $"{nameof(MouseMotionEvent)} {this.UnsafeAsReadOnly<MouseMotionEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<MouseButtonEvent>()           => $"{nameof(MouseButtonEvent)} {this.UnsafeAsReadOnly<MouseButtonEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<MouseWheelEvent>()            => $"{nameof(MouseWheelEvent)} {this.UnsafeAsReadOnly<MouseWheelEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<MouseDeviceEvent>()           => $"{nameof(MouseDeviceEvent)} {this.UnsafeAsReadOnly<MouseDeviceEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<JoyAxisEvent>()               => $"{nameof(JoyAxisEvent)} {this.UnsafeAsReadOnly<JoyAxisEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<JoyBallEvent>()               => $"{nameof(JoyBallEvent)} {this.UnsafeAsReadOnly<JoyBallEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<JoyHatEvent>()                => $"{nameof(JoyHatEvent)} {this.UnsafeAsReadOnly<JoyHatEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<JoyButtonEvent>()             => $"{nameof(JoyButtonEvent)} {this.UnsafeAsReadOnly<JoyButtonEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<JoyDeviceEvent>()             => $"{nameof(JoyDeviceEvent)} {this.UnsafeAsReadOnly<JoyDeviceEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<JoyBatteryEvent>()            => $"{nameof(JoyBatteryEvent)} {this.UnsafeAsReadOnly<JoyBatteryEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<GamepadAxisEvent>()           => $"{nameof(GamepadAxisEvent)} {this.UnsafeAsReadOnly<GamepadAxisEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<GamepadButtonEvent>()         => $"{nameof(GamepadButtonEvent)} {this.UnsafeAsReadOnly<GamepadButtonEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<GamepadDeviceEvent>()         => $"{nameof(GamepadDeviceEvent)} {this.UnsafeAsReadOnly<GamepadDeviceEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<GamepadTouchpadEvent>()       => $"{nameof(GamepadTouchpadEvent)} {this.UnsafeAsReadOnly<GamepadTouchpadEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<GamepadSensorEvent>()         => $"{nameof(GamepadSensorEvent)} {this.UnsafeAsReadOnly<GamepadSensorEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<TouchFingerEvent>()           => $"{nameof(TouchFingerEvent)} {this.UnsafeAsReadOnly<TouchFingerEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<PinchFingerEvent>()           => $"{nameof(PinchFingerEvent)} {this.UnsafeAsReadOnly<PinchFingerEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<ClipboardEvent>()             => $"{nameof(ClipboardEvent)} {this.UnsafeAsReadOnly<ClipboardEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<DropEvent>()                  => $"{nameof(DropEvent)} {this.UnsafeAsReadOnly<DropEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<AudioDeviceEvent>()           => $"{nameof(AudioDeviceEvent)} {this.UnsafeAsReadOnly<AudioDeviceEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<SensorEvent>()                => $"{nameof(SensorEvent)} {this.UnsafeAsReadOnly<SensorEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<PenProximityEvent>()          => $"{nameof(PenProximityEvent)} {this.UnsafeAsReadOnly<PenProximityEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<PenTouchEvent>()              => $"{nameof(PenTouchEvent)} {this.UnsafeAsReadOnly<PenTouchEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<PenButtonEvent>()             => $"{nameof(PenButtonEvent)} {this.UnsafeAsReadOnly<PenButtonEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<PenMotionEvent>()             => $"{nameof(PenMotionEvent)} {this.UnsafeAsReadOnly<PenMotionEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<PenAxisEvent>()               => $"{nameof(PenAxisEvent)} {this.UnsafeAsReadOnly<PenAxisEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<CameraDeviceEvent>()          => $"{nameof(CameraDeviceEvent)} {this.UnsafeAsReadOnly<CameraDeviceEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<RenderEvent>()                => $"{nameof(RenderEvent)} {this.UnsafeAsReadOnly<RenderEvent>().ToString(format, formatProvider)}",
-		_ when this.Is<UserEvent>()                  => $"{nameof(UserEvent)} {this.UnsafeAsReadOnly<UserEvent>().ToString(format, formatProvider)}",
-		_                                            => $"{nameof(Event)} {this.UnsafeAsReadOnly<CommonEvent>().ToString(format, formatProvider)}"
-	};
+	public readonly string ToString(string? format, IFormatProvider? formatProvider)
+		// Can't use union type pattern matching here, since that's a .NET 11+ feature, and we want to support .NET 10 as well (possibly even with the same code without `#if` directives).
+		// That's why we make use of the `TryGet<TEvent>(out TEvent)` method and a big if-else-if-...-else-chain instead.
+		// TODO: add cases
+		=> TryGet(out DisplayEvent displayEvent)                             ? $"{nameof(DisplayEvent)} {displayEvent}"
+		 : TryGet(out WindowEvent windowEvent)                               ? $"{nameof(WindowEvent)} {windowEvent}"
+		 : TryGet(out KeyboardDeviceEvent keyboardDeviceEvent)               ? $"{nameof(KeyboardDeviceEvent)} {keyboardDeviceEvent}"
+		 : TryGet(out KeyboardEvent keyboardEvent)                           ? $"{nameof(KeyboardEvent)} {keyboardEvent}"
+		 : TryGet(out TextEditingEvent textEditingEvent)                     ? $"{nameof(TextEditingEvent)} {textEditingEvent}"
+		 : TryGet(out TextEditingCandidatesEvent textEditingCandidatesEvent) ? $"{nameof(TextEditingCandidatesEvent)} {textEditingCandidatesEvent}"
+		 : TryGet(out TextInputEvent textInputEvent)                         ? $"{nameof(TextInputEvent)} {textInputEvent}"
+		 : TryGet(out MouseDeviceEvent mouseDeviceEvent)                     ? $"{nameof(MouseDeviceEvent)} {mouseDeviceEvent}"
+		 : TryGet(out MouseMotionEvent mouseMotionEvent)                     ? $"{nameof(MouseMotionEvent)} {mouseMotionEvent}"
+		 : TryGet(out MouseButtonEvent mouseButtonEvent)                     ? $"{nameof(MouseButtonEvent)} {mouseButtonEvent}"
+		 : TryGet(out MouseWheelEvent mouseWheelEvent)                       ? $"{nameof(MouseWheelEvent)} {mouseWheelEvent}"
+		 : TryGet(out JoyDeviceEvent joyDeviceEvent)                         ? $"{nameof(JoyDeviceEvent)} {joyDeviceEvent}"
+		 : TryGet(out JoyAxisEvent joyAxisEvent)                             ? $"{nameof(JoyAxisEvent)} {joyAxisEvent}"
+		 : TryGet(out JoyBallEvent joyBallEvent)                             ? $"{nameof(JoyBallEvent)} {joyBallEvent}"
+		 : TryGet(out JoyHatEvent joyHatEvent)                               ? $"{nameof(JoyHatEvent)} {joyHatEvent}"
+		 : TryGet(out JoyButtonEvent joyButtonEvent)                         ? $"{nameof(JoyButtonEvent)} {joyButtonEvent}"
+		 : TryGet(out JoyBatteryEvent joyBatteryEvent)                       ? $"{nameof(JoyBatteryEvent)} {joyBatteryEvent}"
+		 : TryGet(out GamepadDeviceEvent gamepadDeviceEvent)                 ? $"{nameof(GamepadDeviceEvent)} {gamepadDeviceEvent}"
+		 : TryGet(out GamepadAxisEvent gamepadAxisEvent)                     ? $"{nameof(GamepadAxisEvent)} {gamepadAxisEvent}"
+		 : TryGet(out GamepadButtonEvent gamepadButtonEvent)                 ? $"{nameof(GamepadButtonEvent)} {gamepadButtonEvent}"
+		 : TryGet(out GamepadTouchpadEvent gamepadTouchpadEvent)             ? $"{nameof(GamepadTouchpadEvent)} {gamepadTouchpadEvent}"
+		 : TryGet(out GamepadSensorEvent gamepadSensorEvent) 				 ? $"{nameof(GamepadSensorEvent)} {gamepadSensorEvent}"
+#if SDL3_6_0_OR_GREATER
+		 : TryGet(out GamepadCapSenseEvent gamepadCapSenseEvent)             ? $"{nameof(GamepadCapSenseEvent)} {gamepadCapSenseEvent}"
+#endif
+		 : TryGet(out AudioDeviceEvent audioDeviceEvent)                     ? $"{nameof(AudioDeviceEvent)} {audioDeviceEvent}"
+		 : TryGet(out CameraDeviceEvent cameraDeviceEvent)                   ? $"{nameof(CameraDeviceEvent)} {cameraDeviceEvent}"
+		 : TryGet(out SensorEvent sensorEvent)                               ? $"{nameof(SensorEvent)} {sensorEvent}"
+		 : TryGet(out QuitEvent quitEvent)                                   ? $"{nameof(QuitEvent)} {quitEvent}"
+		 : TryGet(out UserEvent? userEvent)                                  ? $"{userEvent.GetType().Name} {userEvent}" // `UserEvent` must be matched before `UnmanagedUserEvent`, because both accept the same event types, but `UserEvent` has more constraints, so it should be handled first
+		 : TryGet(out UnmanagedUserEvent unmanagedUserEvent)                 ? $"{nameof(UnmanagedUserEvent)} {unmanagedUserEvent}" // `UnmanagedUserEvent` must be matched after `UserEvent`, because both accept the same event types, but `UserEvent` has more constraints, so it should be handled first
+		 : TryGet(out TouchFingerEvent touchFingerEvent)                     ? $"{nameof(TouchFingerEvent)} {touchFingerEvent}"
+#if SDL3_4_0_OR_GREATER
+		 : TryGet(out PinchFingerEvent pinchFingerEvent)                     ? $"{nameof(PinchFingerEvent)} {pinchFingerEvent}"
+#endif
+		 : TryGet(out PenProximityEvent penProximityEvent)                   ? $"{nameof(PenProximityEvent)} {penProximityEvent}"
+		 : TryGet(out PenTouchEvent penTouchEvent)                           ? $"{nameof(PenTouchEvent)} {penTouchEvent}"
+		 : TryGet(out PenMotionEvent penMotionEvent)                         ? $"{nameof(PenMotionEvent)} {penMotionEvent}"
+		 : TryGet(out PenButtonEvent penButtonEvent)                         ? $"{nameof(PenButtonEvent)} {penButtonEvent}"
+		 : TryGet(out PenAxisEvent penAxisEvent)                             ? $"{nameof(PenAxisEvent)} {penAxisEvent}"
+		 : TryGet(out RenderEvent renderEvent)                               ? $"{nameof(RenderEvent)} {renderEvent}"
+		 : TryGet(out DropEvent dropEvent)                                   ? $"{nameof(DropEvent)} {dropEvent}"
+		 : TryGet(out ClipboardEvent clipboardEvent)                         ? $"{nameof(ClipboardEvent)} {clipboardEvent}"
+#if SDL3_6_0_OR_GREATER
+		 : TryGet(out NotificationEvent notificationEvent)                   ? $"{nameof(NotificationEvent)} {notificationEvent}"
+#endif
+		 : TryGet(out CommonEvent commonEvent)                               ? $"{nameof(CommonEvent)} {commonEvent}" // since `CommonEvent` accepts all event types, it should be handled last, as a fallback
+		 :                                                                     $"{{ {Common.ToPartialString()} }}"; // since the `CommonEvent` case before should already handle everything, this should never be reached; it's just here to make the whole thing exhaustive
 
 	/// <inheritdoc/>
-	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default) => (charsWritten = 0) switch
+	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
 	{
-		_ when this.Is<QuitEvent>()                  => SpanFormat.TryWrite($"{nameof(QuitEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<QuitEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<DisplayEvent>()               => SpanFormat.TryWrite($"{nameof(DisplayEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<DisplayEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<WindowEvent>()                => SpanFormat.TryWrite($"{nameof(WindowEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<WindowEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<KeyboardEvent>()              => SpanFormat.TryWrite($"{nameof(KeyboardEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<KeyboardEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<TextEditingEvent>()           => SpanFormat.TryWrite($"{nameof(TextEditingEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<TextEditingEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<TextInputEvent>()             => SpanFormat.TryWrite($"{nameof(TextInputEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<TextInputEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<KeyboardDeviceEvent>()        => SpanFormat.TryWrite($"{nameof(KeyboardDeviceEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<KeyboardDeviceEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<TextEditingCandidatesEvent>() => SpanFormat.TryWrite($"{nameof(TextEditingCandidatesEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<TextEditingCandidatesEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<MouseMotionEvent>()           => SpanFormat.TryWrite($"{nameof(MouseMotionEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<MouseMotionEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<MouseButtonEvent>()           => SpanFormat.TryWrite($"{nameof(MouseButtonEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<MouseButtonEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<MouseWheelEvent>()            => SpanFormat.TryWrite($"{nameof(MouseWheelEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<MouseWheelEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<MouseDeviceEvent>()           => SpanFormat.TryWrite($"{nameof(MouseDeviceEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<MouseDeviceEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<JoyAxisEvent>()               => SpanFormat.TryWrite($"{nameof(JoyAxisEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<JoyAxisEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<JoyBallEvent>()               => SpanFormat.TryWrite($"{nameof(JoyBallEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<JoyBallEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<JoyHatEvent>()                => SpanFormat.TryWrite($"{nameof(JoyHatEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<JoyHatEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<JoyButtonEvent>()             => SpanFormat.TryWrite($"{nameof(JoyButtonEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<JoyButtonEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<JoyDeviceEvent>()             => SpanFormat.TryWrite($"{nameof(JoyDeviceEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<JoyDeviceEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<JoyBatteryEvent>()            => SpanFormat.TryWrite($"{nameof(JoyBatteryEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<JoyBatteryEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<GamepadAxisEvent>()           => SpanFormat.TryWrite($"{nameof(GamepadAxisEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<GamepadAxisEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<GamepadButtonEvent>()         => SpanFormat.TryWrite($"{nameof(GamepadButtonEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<GamepadButtonEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<GamepadDeviceEvent>()         => SpanFormat.TryWrite($"{nameof(GamepadDeviceEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<GamepadDeviceEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<GamepadTouchpadEvent>()       => SpanFormat.TryWrite($"{nameof(GamepadTouchpadEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<GamepadTouchpadEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<GamepadSensorEvent>()         => SpanFormat.TryWrite($"{nameof(GamepadSensorEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<GamepadSensorEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<TouchFingerEvent>()           => SpanFormat.TryWrite($"{nameof(TouchFingerEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<TouchFingerEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<PinchFingerEvent>()           => SpanFormat.TryWrite($"{nameof(PinchFingerEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<PinchFingerEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<ClipboardEvent>()             => SpanFormat.TryWrite($"{nameof(ClipboardEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<ClipboardEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<DropEvent>()                  => SpanFormat.TryWrite($"{nameof(DropEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<DropEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<AudioDeviceEvent>()           => SpanFormat.TryWrite($"{nameof(AudioDeviceEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<AudioDeviceEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<SensorEvent>()                => SpanFormat.TryWrite($"{nameof(SensorEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<SensorEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<PenProximityEvent>()          => SpanFormat.TryWrite($"{nameof(PenProximityEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<PenProximityEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<PenTouchEvent>()              => SpanFormat.TryWrite($"{nameof(PenTouchEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<PenTouchEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<PenButtonEvent>()             => SpanFormat.TryWrite($"{nameof(PenButtonEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<PenButtonEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<PenMotionEvent>()             => SpanFormat.TryWrite($"{nameof(PenMotionEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<PenMotionEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<PenAxisEvent>()               => SpanFormat.TryWrite($"{nameof(PenAxisEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<PenAxisEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<CameraDeviceEvent>()          => SpanFormat.TryWrite($"{nameof(CameraDeviceEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<CameraDeviceEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<RenderEvent>()                => SpanFormat.TryWrite($"{nameof(RenderEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<RenderEvent>(), ref destination, ref charsWritten, format, provider),
-		_ when this.Is<UserEvent>()                  => SpanFormat.TryWrite($"{nameof(UserEvent)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<UserEvent>(), ref destination, ref charsWritten, format, provider),
-		_                                            => SpanFormat.TryWrite($"{nameof(Event)} ", ref destination, ref charsWritten)
-		                                             && SpanFormat.TryWrite(in this.UnsafeAsReadOnly<CommonEvent>(), ref destination, ref charsWritten, format, provider)
-	};
+		charsWritten = 0;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static implicit ICommonEvent<Event>.operator Event(in Event @event) => @event;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static explicit ICommonEvent<Event>.operator Event(in Event @event) => @event;
+		// Can't use union type pattern matching here, since that's a .NET 11+ feature, and we want to support .NET 10 as well (possibly even with the same code without `#if` directives).
+		// That's why we make use of the `TryGet<TEvent>(out TEvent)` method and a big if-else-if-...-else-chain instead.
+		// TODO: add cases
+		return TryGet(out DisplayEvent displayEvent)                              ? SpanFormat.TryWrite($"{nameof(DisplayEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in displayEvent, ref destination, ref charsWritten)
+		     : TryGet(out WindowEvent windowEvent)                                ? SpanFormat.TryWrite($"{nameof(WindowEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in windowEvent, ref destination, ref charsWritten)
+		     : TryGet(out KeyboardDeviceEvent keyboardDeviceEvent)                ? SpanFormat.TryWrite($"{nameof(KeyboardDeviceEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in keyboardDeviceEvent, ref destination, ref charsWritten)
+		     : TryGet(out KeyboardEvent keyboardEvent)                            ? SpanFormat.TryWrite($"{nameof(KeyboardEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in keyboardEvent, ref destination, ref charsWritten)
+		     : TryGet(out TextEditingEvent textEditingEvent)                      ? SpanFormat.TryWrite($"{nameof(TextEditingEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in textEditingEvent, ref destination, ref charsWritten)
+		     : TryGet(out TextEditingCandidatesEvent textEditingCandidatesEvent)  ? SpanFormat.TryWrite($"{nameof(TextEditingCandidatesEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in textEditingCandidatesEvent, ref destination, ref charsWritten)
+		     : TryGet(out TextInputEvent textInputEvent)                          ? SpanFormat.TryWrite($"{nameof(TextInputEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in textInputEvent, ref destination, ref charsWritten)
+		     : TryGet(out MouseDeviceEvent mouseDeviceEvent)                      ? SpanFormat.TryWrite($"{nameof(MouseDeviceEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in mouseDeviceEvent, ref destination, ref charsWritten)
+		     : TryGet(out MouseMotionEvent mouseMotionEvent)                      ? SpanFormat.TryWrite($"{nameof(MouseMotionEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in mouseMotionEvent, ref destination, ref charsWritten)
+		     : TryGet(out MouseButtonEvent mouseButtonEvent)                      ? SpanFormat.TryWrite($"{nameof(MouseButtonEvent)} ", ref destination, ref charsWritten)
+			                                                                     && SpanFormat.TryWrite(in mouseButtonEvent, ref destination, ref charsWritten)
+			 : TryGet(out MouseWheelEvent mouseWheelEvent)                        ? SpanFormat.TryWrite($"{nameof(MouseWheelEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in mouseWheelEvent, ref destination, ref charsWritten)
+			 : TryGet(out JoyDeviceEvent joyDeviceEvent)                          ? SpanFormat.TryWrite($"{nameof(JoyDeviceEvent)} ", ref destination, ref charsWritten)
+											                                     && SpanFormat.TryWrite(in joyDeviceEvent, ref destination, ref charsWritten)
+			 : TryGet(out JoyAxisEvent joyAxisEvent)                              ? SpanFormat.TryWrite($"{nameof(JoyAxisEvent)} ", ref destination, ref charsWritten)
+			                                                                     && SpanFormat.TryWrite(in joyAxisEvent, ref destination, ref charsWritten)
+			 : TryGet(out JoyBallEvent joyBallEvent)                              ? SpanFormat.TryWrite($"{nameof(JoyBallEvent)} ", ref destination, ref charsWritten)
+												                                 && SpanFormat.TryWrite(in joyBallEvent, ref destination, ref charsWritten)
+			 : TryGet(out JoyHatEvent joyHatEvent)                                ? SpanFormat.TryWrite($"{nameof(JoyHatEvent)} ", ref destination, ref charsWritten)
+			                                                                     && SpanFormat.TryWrite(in joyHatEvent, ref destination, ref charsWritten)
+			 : TryGet(out JoyButtonEvent joyButtonEvent)                          ? SpanFormat.TryWrite($"{nameof(JoyButtonEvent)} ", ref destination, ref charsWritten)
+			                                                                     && SpanFormat.TryWrite(in joyButtonEvent, ref destination, ref charsWritten)
+			 : TryGet(out JoyBatteryEvent joyBatteryEvent)                        ? SpanFormat.TryWrite($"{nameof(JoyBatteryEvent)} ", ref destination, ref charsWritten)
+			                                                                     && SpanFormat.TryWrite(in joyBatteryEvent, ref destination, ref charsWritten)
+			 : TryGet(out GamepadDeviceEvent gamepadDeviceEvent)                  ? SpanFormat.TryWrite($"{nameof(GamepadDeviceEvent)} ", ref destination, ref charsWritten)
+			                                                                     && SpanFormat.TryWrite(in gamepadDeviceEvent, ref destination, ref charsWritten)
+			 : TryGet(out GamepadAxisEvent gamepadAxisEvent)                      ? SpanFormat.TryWrite($"{nameof(GamepadAxisEvent)} ", ref destination, ref charsWritten)
+			 																	 && SpanFormat.TryWrite(in gamepadAxisEvent, ref destination, ref charsWritten)
+			 : TryGet(out GamepadButtonEvent gamepadButtonEvent)                  ? SpanFormat.TryWrite($"{nameof(GamepadButtonEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in gamepadButtonEvent, ref destination, ref charsWritten)
+			 : TryGet(out GamepadTouchpadEvent gamepadTouchpadEvent)              ? SpanFormat.TryWrite($"{nameof(GamepadTouchpadEvent)} ", ref destination, ref charsWritten)
+			 																	 && SpanFormat.TryWrite(in gamepadTouchpadEvent, ref destination, ref charsWritten)
+			 : TryGet(out GamepadSensorEvent gamepadSensorEvent)                  ? SpanFormat.TryWrite($"{nameof(GamepadSensorEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in gamepadSensorEvent, ref destination, ref charsWritten)
+#if SDL3_6_0_OR_GREATER
+			 : TryGet(out GamepadCapSenseEvent gamepadCapSenseEvent)              ? SpanFormat.TryWrite($"{nameof(GamepadCapSenseEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in gamepadCapSenseEvent, ref destination, ref charsWritten)
+#endif
+			 : TryGet(out AudioDeviceEvent audioDeviceEvent)                      ? SpanFormat.TryWrite($"{nameof(AudioDeviceEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in audioDeviceEvent, ref destination, ref charsWritten)
+			 : TryGet(out CameraDeviceEvent cameraDeviceEvent)                    ? SpanFormat.TryWrite($"{nameof(CameraDeviceEvent)} ", ref destination, ref charsWritten)
+			 																	 && SpanFormat.TryWrite(in cameraDeviceEvent, ref destination, ref charsWritten)
+			 : TryGet(out SensorEvent sensorEvent)                                ? SpanFormat.TryWrite($"{nameof(SensorEvent)} ", ref destination, ref charsWritten)
+			 																	 && SpanFormat.TryWrite(in sensorEvent, ref destination, ref charsWritten)
+			 : TryGet(out QuitEvent quitEvent)                                    ? SpanFormat.TryWrite($"{nameof(QuitEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in quitEvent, ref destination, ref charsWritten)
+			 : TryGet(out UserEvent? userEvent)                                   ? SpanFormat.TryWrite(userEvent.GetType().Name, ref destination, ref charsWritten) // `UserEvent` must be matched before `UnmanagedUserEvent`, because both accept the same event types, but `UserEvent` has more constraints, so it should be handled first
+																				 && SpanFormat.TryWrite(' ', ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in userEvent, ref destination, ref charsWritten)
+			 : TryGet(out UnmanagedUserEvent unmanagedUserEvent)                  ? SpanFormat.TryWrite($"{nameof(UnmanagedUserEvent)} ", ref destination, ref charsWritten) // `UnmanagedUserEvent` must be matched after `UserEvent`, because both accept the same event types, but `UserEvent` has more constraints, so it should be handled first
+																				 && SpanFormat.TryWrite(in unmanagedUserEvent, ref destination, ref charsWritten)
+			 : TryGet(out TouchFingerEvent touchFingerEvent)                      ? SpanFormat.TryWrite($"{nameof(TouchFingerEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in touchFingerEvent, ref destination, ref charsWritten)
+#if SDL3_4_0_OR_GREATER
+			 : TryGet(out PinchFingerEvent pinchFingerEvent)                     ? SpanFormat.TryWrite($"{nameof(PinchFingerEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in pinchFingerEvent, ref destination, ref charsWritten)
+#endif
+			 : TryGet(out PenProximityEvent penProximityEvent)                    ? SpanFormat.TryWrite($"{nameof(PenProximityEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in penProximityEvent, ref destination, ref charsWritten)
+			 : TryGet(out PenTouchEvent penTouchEvent)                            ? SpanFormat.TryWrite($"{nameof(PenTouchEvent)} ", ref destination, ref charsWritten)
+			 																	 && SpanFormat.TryWrite(in penTouchEvent, ref destination, ref charsWritten)
+			 : TryGet(out PenMotionEvent penMotionEvent) 						  ? SpanFormat.TryWrite($"{nameof(PenMotionEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in penMotionEvent, ref destination, ref charsWritten)
+			 : TryGet(out PenButtonEvent penButtonEvent)                          ? SpanFormat.TryWrite($"{nameof(PenButtonEvent)} ", ref destination, ref charsWritten)
+			 																	 && SpanFormat.TryWrite(in penButtonEvent, ref destination, ref charsWritten)
+			 : TryGet(out PenAxisEvent penAxisEvent)                              ? SpanFormat.TryWrite($"{nameof(PenAxisEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in penAxisEvent, ref destination, ref charsWritten)
+			 : TryGet(out RenderEvent renderEvent)                                ? SpanFormat.TryWrite($"{nameof(RenderEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in renderEvent, ref destination, ref charsWritten)
+			 : TryGet(out DropEvent dropEvent)                                    ? SpanFormat.TryWrite($"{nameof(DropEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in dropEvent, ref destination, ref charsWritten)
+			 : TryGet(out ClipboardEvent clipboardEvent)                          ? SpanFormat.TryWrite($"{nameof(ClipboardEvent)} ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in clipboardEvent, ref destination, ref charsWritten)
+#if SDL3_6_0_OR_GREATER
+			 : TryGet(out NotificationEvent notificationEvent)                    ? SpanFormat.TryWrite($"{nameof(Notification)}, ", ref destination, ref charsWritten)
+																				 && SpanFormat.TryWrite(in notificationEvent, ref destination, ref charsWritten)
+#endif
+			 : TryGet(out CommonEvent commonEvent)                                ? SpanFormat.TryWrite($"{nameof(CommonEvent)} ", ref destination, ref charsWritten) // since `CommonEvent` accepts all event types, it should be handled last, as a fallback
+												                                 && SpanFormat.TryWrite(in commonEvent, ref destination, ref charsWritten)
+			 :                                                                      SpanFormat.TryWrite("{ ", ref destination, ref charsWritten) // since the `CommonEvent` case before should already handle everything, this should never be reached; it's just here to make the whole thing exhaustive
+												                                 && Common.TryPartiallyFormat(ref destination, ref charsWritten)
+												                                 && SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
+	}
 }

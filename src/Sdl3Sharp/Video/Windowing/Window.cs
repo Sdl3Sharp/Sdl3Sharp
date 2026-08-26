@@ -72,7 +72,7 @@ public abstract partial class Window : IDisposable
 		// even if it's done through other means (e.g. a child window getting destroyed alongside its parent).
 		// This way we can automatically dispose the corresponding Window instance and remove it,
 		// when the native window gets destroyed.
-		Sdl.SDL_AddEventWatch(&EventWatchResizeOrDestroy, unchecked((void*)GCHandle.ToIntPtr(mSelfHandle)));
+		EventQueue.SDL_AddEventWatch(&EventWatchResizeOrDestroy, unchecked((void*)GCHandle.ToIntPtr(mSelfHandle)));
 
 		if (register)
 		{
@@ -1757,7 +1757,7 @@ public abstract partial class Window : IDisposable
 				{
 					// Hopefully 'EventWatchDestroyImpl' doesn't change its address during the lifetime of the window (it shouldn't)
 					// and 'GCHandle.ToIntPtr' always returns the same value for the same GCHandle (it should).
-					Sdl.SDL_RemoveEventWatch(&EventWatchResizeOrDestroy, unchecked((void*)GCHandle.ToIntPtr(mSelfHandle)));
+					EventQueue.SDL_RemoveEventWatch(&EventWatchResizeOrDestroy, unchecked((void*)GCHandle.ToIntPtr(mSelfHandle)));
 
 					mSelfHandle.Free();
 					mSelfHandle = default;

@@ -1,5 +1,6 @@
 ﻿using Sdl3Sharp.Input;
 using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -9,27 +10,12 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal MouseMotionEvent Motion;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="MouseMotionEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="MouseMotionEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in MouseMotionEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Motion = @event;
-}
-
 /// <summary>
 /// Represents an event that occurs when a mouse is moved
 /// </summary>
 /// <remarks>
 /// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.MouseMotion"/></description></item>
 /// </list>
@@ -37,19 +23,10 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, ISpanFormattable
+public partial struct MouseMotionEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.MouseMotion;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<MouseMotionEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref MouseMotionEvent ICommonEvent<MouseMotionEvent>.GetReference(ref Event @event) => ref @event.Motion;
 
 	private CommonEvent mCommon;
 	private uint mWindowID;
@@ -60,31 +37,25 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	private float mXRel;
 	private float mYRel;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.MouseMotion"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.MouseMotion"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="MouseMotionEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(MouseMotionEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(MouseMotionEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -96,11 +67,16 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with mouse focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with mouse focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="MouseMotionEvent"/> is most likely the window that currently has mouse focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
@@ -108,15 +84,60 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the mouse device ID for the <see cref="Mouse"/> associated with the event
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The mouse device ID for the <see cref="Mouse"/> associated with the event, <see cref="SDL_TOUCH_MOUSEID"/> for touch events, or <c>0</c>
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="MouseMotionEvent"/> is most likely the window that currently has mouse focus, if any.
+	/// </para>
+	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Mouse.Id">ID</see> of the <see cref="Input.Mouse"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Mouse.Id">ID</see> of the <see cref="Input.Mouse"/> associated with this event, or <c>0</c> if the mouse is unknown
 	/// </value>
 	public uint MouseId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Input.Mouse"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Input.Mouse"/> associated with this event, or <c><see langword="null"/></c> if the mouse is unknown
+	/// </value>
+	public Mouse? Mouse
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		readonly get
+		{
+			if (Input.Mouse.TryGetFromId(mWhich, out var mouse))
+			{
+				return mouse;
+			}
+
+			return null;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		set => mWhich = value?.Id ?? 0;
 	}
 
 	/// <summary>
@@ -132,10 +153,10 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the X coordinate of the mouse cursor
+	/// Gets or sets the horizontal coordinate of the mouse cursor
 	/// </summary>
 	/// <value>
-	/// The X coordinate of the mouse cursor, relative to the <see cref="Window"/> specified through <see cref="WindowId"/>
+	/// The horizontal coordinate of the mouse cursor, relative to the <see cref="Window"/>, if any
 	/// </value>
 	public float X
 	{
@@ -144,10 +165,10 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the Y coordinate of the mouse cursor
+	/// Gets or sets the vertical coordinate of the mouse cursor
 	/// </summary>
 	/// <value>
-	/// The Y coordinate of the mouse cursor, relative to the <see cref="Window"/> specified through <see cref="WindowId"/>
+	/// The vertical coordinate of the mouse cursor, relative to the <see cref="Window"/>, if any
 	/// </value>
 	public float Y
 	{
@@ -156,10 +177,10 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the relative motion in the X direction
+	/// Gets or sets the relative motion in the horizontal direction
 	/// </summary>
 	/// <value>
-	/// The relative motion in the X direction
+	/// The relative motion in the horizontal direction
 	/// </value>
 	public float RelativeX
 	{
@@ -168,10 +189,10 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the relative motion in the Y direction
+	/// Gets or sets the relative motion in the vertical direction
 	/// </summary>
 	/// <value>
-	/// The relative motion in the Y direction
+	/// The relative motion in the vertical direction
 	/// </value>
 	public float RelativeY
 	{
@@ -190,33 +211,14 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append($", {nameof(MouseId)}: ")
-							   .Append(MouseId.ToString(format, formatProvider))
-							   .Append($", {nameof(State)}: ")
-							   .Append(State)
-							   .Append($", {nameof(X)}: ")
-							   .Append(X.ToString(format, formatProvider))
-							   .Append($", {nameof(Y)}: ")
-							   .Append(Y.ToString(format, formatProvider))
-							   .Append($", {nameof(RelativeX)}: ")
-							   .Append(RelativeX.ToString(format, formatProvider))
-							   .Append($", {nameof(RelativeY)}: ")
-							   .Append(RelativeY.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+			nameof(MouseId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(State)}: {mState}, {
+			nameof(X)}: {mX.ToString(format, formatProvider)}, {
+			nameof(Y)}: {mY.ToString(format, formatProvider)}, {
+			nameof(RelativeX)}: {mXRel.ToString(format, formatProvider)}, {
+			nameof(RelativeY)}: {mYRel.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -224,48 +226,21 @@ public struct MouseMotionEvent : ICommonEvent<MouseMotionEvent>, IFormattable, I
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(MouseId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(MouseId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(State)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(State, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mState, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(X)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(X, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mX, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Y)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Y, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mY, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(RelativeX)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(RelativeX, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mXRel, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(RelativeY)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(RelativeY, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mYRel, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in MouseMotionEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.MouseMotion"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.MouseMotion"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator MouseMotionEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotMouseMotionEvent();
-		}
-
-		return @event.Motion;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotMouseMotionEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(MouseMotionEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

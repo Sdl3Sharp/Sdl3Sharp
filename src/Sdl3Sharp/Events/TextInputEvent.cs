@@ -1,88 +1,58 @@
 ﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal TextInputEvent Text;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="TextInputEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="TextInputEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in TextInputEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Text = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when <see cref="EventType.TextInput">text input</see> is happening
+/// Represents an event that occurs the user has input text
 /// </summary>
 /// <remarks>
 /// <para>
-/// This event will never be delivered unless text input is enabled by calling <see cref="SDL_StartTextInput"/>. Text input is disabled by default!
-/// </para>
-/// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.TextInput"/></description></item>
 /// </list>
 /// </para>
+/// <para>
+/// Note that <see cref="TextInputEvent"/>s won't be received unless text input was started for a <see cref="Video.Windowing.Window"/> by calling <see cref="Window.TryStartTextInput()"/> or <see cref="Window.TryStartTextInput(Sdl3Sharp.Input.TextInputType?, Sdl3Sharp.Input.Capitalization?, bool?, bool?, string?, string?, string?, int?, Sdl3Sharp.Properties?)"/> on that window.
+/// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct TextInputEvent : ICommonEvent<TextInputEvent>, IFormattable, ISpanFormattable
+public partial struct TextInputEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.TextInput;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<TextInputEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref TextInputEvent ICommonEvent<TextInputEvent>.GetReference(ref Event @event) => ref @event.Text;
-
 	private CommonEvent mCommon;
 	private uint mWindowID;
-	private unsafe readonly byte* mText;
+	private readonly byte* mText; // There's no safe way to set the text from the managed side, so the field is readonly
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.TextInput"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.TextInput"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="TextInputEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(TextInputEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of an {nameof(AudioDeviceEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -94,15 +64,42 @@ public struct TextInputEvent : ICommonEvent<TextInputEvent>, IFormattable, ISpan
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with keyboard focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with keyboard focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="TextInputEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="TextInputEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
 	}
 
 	/// <summary>
@@ -111,27 +108,30 @@ public struct TextInputEvent : ICommonEvent<TextInputEvent>, IFormattable, ISpan
 	/// <value>
 	/// The input text
 	/// </value>
-	/// <remarks>
-	/// <para>
-	/// Reading this property can be very expensive, you should consider caching it's value.
-	/// </para>
-	/// <para>
-	/// Setting this property is not supported and will lead the property to throw a <see cref="NotSupportedException"/>.
-	/// </para>
-	/// </remarks>
-	/// <exception cref="NotSupportedException">When setting this property</exception>
-	public string? Text
+	/// <exception cref="InvalidOperationException">The text that the <see cref="TextInputEvent"/> contains is <c><see langword="null"/></c></exception>
+	public readonly string Text
 	{
-		readonly get { unsafe { return Utf8StringMarshaller.ConvertToManaged(mText); } }
+		get
+		{
+			unsafe
+			{
+				if (mText is null)
+				{
+					[DoesNotReturn]
+					static void failTextNull() => throw new InvalidOperationException($"The {nameof(Text)} that the {nameof(TextInputEvent)} contains is null.");
 
-		[Obsolete($"Setting {nameof(Text)} is not supported yet.")]
-		[DoesNotReturn]
-		set => throw new NotSupportedException($"Setting {nameof(Text)} is not supported");
+					failTextNull();
+				}
+
+				using var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText);
+				return textUtf16.ToManaged()!; // this would only be null if `mText` is null
+			}
+		}
 	}
 
-	internal readonly ReadOnlySpan<byte> TextUtf8
+	internal unsafe readonly byte* TextUtf8
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get { unsafe { return MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText); } }
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mText;
 	}
 
 	/// <inheritdoc/>
@@ -146,32 +146,14 @@ public struct TextInputEvent : ICommonEvent<TextInputEvent>, IFormattable, ISpan
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
 	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-				         .Append($", {nameof(WindowId)}: ")
-						 .Append(WindowId.ToString(format, formatProvider))
-						 .Append($", {nameof(Text)}: ");
+		unsafe
+		{ 
+			using var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText);
 
-			if (Text is string text)
-			{
-				builder.Append('"')
-					   .Append(text)
-					   .Append('"');
+			return $"{{ {mCommon.ToPartialString()}, {
+				nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+				nameof(Text)}: {textUtf16.Buffer switch { not null => $"\"{textUtf16.ToManaged()}\"", null => "null" }} }}";
 			}
-			else
-			{
-				builder.Append("null");
-			}
-
-			return builder.Append(" }")
-						  .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
 	}
 
 	/// <inheritdoc/>
@@ -181,44 +163,36 @@ public struct TextInputEvent : ICommonEvent<TextInputEvent>, IFormattable, ISpan
 		{
 			charsWritten = 0;
 
-			return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-				&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			if ( !(SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
+				&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
-				&& SpanFormat.TryWrite($", {nameof(Text)}: ", ref destination, ref charsWritten)
-				&& (mText is not null
-					?  SpanFormat.TryWrite('"', ref destination, ref charsWritten)
-					&& SpanFormat.TryWriteUtf8(MemoryMarshal.CreateReadOnlySpanFromNullTerminated(mText), ref destination, ref charsWritten)
-					&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)
-					:  SpanFormat.TryWrite("null", ref destination, ref charsWritten))
-				&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
+				&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
+				&& SpanFormat.TryWrite($", {nameof(Text)}", ref destination, ref charsWritten)))
+			{
+				return false;
+			}
+
+			using (var textUtf16 = NativeStrings.FromUtf8ToUtf16(mText))
+			{
+				if (textUtf16.Buffer is not null)
+				{
+					if (!(SpanFormat.TryWrite('"', ref destination, ref charsWritten)
+						&& SpanFormat.TryWrite(textUtf16.AsSpan(), ref destination, ref charsWritten)
+						&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+					{
+						return false;
+					}
+				}
+				else
+				{
+					if (!(SpanFormat.TryWrite("null", ref destination, ref charsWritten)))
+					{
+						return false;
+					}
+				}
+			}
+
+			return SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 		}
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in TextInputEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.TextInput"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.TextInput"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator TextInputEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotTextInputEvent();
-		}
-
-		return @event.Text;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotTextInputEvent() => throw new ArgumentException($"{nameof(@event)} must be an {nameof(TextInputEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

@@ -3,7 +3,7 @@
 /// <summary>
 /// Represents the position of a POV hat on a joystick
 /// </summary>
-public enum JoystickHatState : byte
+public enum JoystickHatPosition : byte
 {
 	/// <summary>Centered position</summary>
 	Centered = 0x00,

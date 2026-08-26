@@ -1,7 +1,7 @@
-﻿namespace Sdl3Sharp;
+﻿namespace Sdl3Sharp.Events;
 
 /// <summary>
-/// Represents action to take in <see cref="Sdl.TryPeepEvents(System.Span{Sdl3Sharp.Events.Event}, Sdl3Sharp.EventAction, Sdl3Sharp.Events.EventType, Sdl3Sharp.Events.EventType, out int)"/>
+/// Represents action to take in <see cref="EventQueue.TryPeepEvents(System.Span{Event}, EventAction, EventType, EventType, out int)"/>
 /// </summary>
 public enum EventAction
 {

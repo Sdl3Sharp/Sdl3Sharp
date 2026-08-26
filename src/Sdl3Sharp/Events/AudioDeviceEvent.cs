@@ -9,84 +9,54 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal AudioDeviceEvent ADevice;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from an <see cref="AudioDeviceEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="AudioDeviceEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in AudioDeviceEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> ADevice = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when an audio device is being <see cref="EventType.AudioDeviceAdded">added</see>, <see cref="EventType.AudioDeviceRemoved">removed</see>, or <see cref="EventType.AudioDeviceFormatChanged">changed</see>
+/// Represents an event that occurs when an <see cref="Audio.AudioDevice"/> is added or removed, or when an <see cref="Audio.AudioDevice"/> changes its format
 /// </summary>
 /// <remarks>
 /// <para>
-/// SDL will send an <see cref="AudioDeviceEvent"/> with <see cref="Type"/> <see cref="EventType.AudioDeviceAdded"/> for every audio device it discovers during initialization.
-/// After that, <see cref="AudioDeviceEvent"/>s with <see cref="Type"/> <see cref="EventType.AudioDeviceAdded"/> will only arrive when an audio device is hotplugged during the application's runtime.
-/// </para>
-/// <para>
 /// Associated <see cref="EventType"/>s:
 /// <list type="bullet">
-/// <item><description><see cref="EventType.AudioDeviceAdded"/></description></item> 
-/// <item><description><see cref="EventType.AudioDeviceRemoved"/></description></item> 
+/// <item><description><see cref="EventType.AudioDeviceAdded"/></description></item>
+/// <item><description><see cref="EventType.AudioDeviceRemoved"/></description></item>
 /// <item><description><see cref="EventType.AudioDeviceFormatChanged"/></description></item>
 /// </list>
+/// </para>
+/// <para>
+/// SDL will send <see cref="EventType.AudioDeviceAdded"/> (<see cref="AudioDeviceEvent"/>) events for each audio device that is already connected when <see cref="Sdl(Sdl3Sharp.Sdl.BuildAction?)">SDL is initialized</see>.
+/// After that, <see cref="EventType.AudioDeviceAdded"/> (<see cref="AudioDeviceEvent"/>) events will only be sent when a new audio device is hotplugged into the system during the application's runtime.
 /// </para>
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct AudioDeviceEvent : ICommonEvent<AudioDeviceEvent>, IFormattable, ISpanFormattable
+public partial struct AudioDeviceEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is >= EventType.AudioDeviceAdded and <= EventType.AudioDeviceFormatChanged;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<AudioDeviceEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref AudioDeviceEvent ICommonEvent<AudioDeviceEvent>.GetReference(ref Event @event) => ref @event.ADevice;
 
 	private CommonEvent mCommon;
 	private uint mWhich;
 	private CBool mRecording;
 	private readonly byte mPadding1, mPadding2, mPadding3;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.AudioDeviceAdded"/>, <see cref="EventType.AudioDeviceRemoved"/>, or <see cref="EventType.AudioDeviceFormatChanged"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.AudioDeviceAdded"/>, <see cref="EventType.AudioDeviceRemoved"/>, nor <see cref="EventType.AudioDeviceFormatChanged"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for an <see cref="AudioDeviceEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(AudioDeviceEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of an {nameof(AudioDeviceEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -98,10 +68,10 @@ public struct AudioDeviceEvent : ICommonEvent<AudioDeviceEvent>, IFormattable, I
 	}
 
 	/// <summary>
-	/// Gets or sets the audio device ID for the <see cref="AudioDevice"/> being <see cref="EventType.AudioDeviceAdded">added</see>, <see cref="EventType.AudioDeviceRemoved">removed</see>, or <see cref="EventType.AudioDeviceFormatChanged">changed</see>
+	/// Gets or sets the <see cref="AudioDevice.Id">ID</see> of the <see cref="Audio.AudioDevice"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The audio device IDfor the <see cref="AudioDevice"/> being <see cref="EventType.AudioDeviceAdded">added</see>, <see cref="EventType.AudioDeviceRemoved">removed</see>, or <see cref="EventType.AudioDeviceFormatChanged">changed</see>
+	/// The <see cref="AudioDevice.Id">ID</see> of the <see cref="Audio.AudioDevice"/> associated with this event
 	/// </value>
 	public uint AudioDeviceId
 	{
@@ -109,11 +79,13 @@ public struct AudioDeviceEvent : ICommonEvent<AudioDeviceEvent>, IFormattable, I
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
 
+	// TODO: Add a `AudioDevice` property once the `AudioDevice` type is implemented
+
 	/// <summary>
-	/// Gets or sets a value indicating if the <see cref="AudioDeviceId">specific audio device</see> is a recording device or a playback device
+	/// Gets or sets a value indicating whether the <see cref="AudioDevice"/> is a recording device or a playback device
 	/// </summary>
 	/// <value>
-	/// A value indicating if the <see cref="AudioDeviceId">specific audio device</see> is a recording device (when <c><see langword="true"/></c>) or a playback device (when <c><see langword="false"/></c>)
+	/// A value indicating whether the <see cref="AudioDevice"/> is a recording device (<c><see langword="true"/></c>) or a playback device (<c><see langword="false"/></c>)
 	/// </value>
 	public bool IsRecordingDevice
 	{
@@ -132,23 +104,9 @@ public struct AudioDeviceEvent : ICommonEvent<AudioDeviceEvent>, IFormattable, I
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(AudioDeviceId)}: ")
-							   .Append(AudioDeviceId.ToString(format, formatProvider))
-							   .Append($", {nameof(IsRecordingDevice)}: ")
-							   .Append(IsRecordingDevice)
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(AudioDeviceId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(IsRecordingDevice)}: {(bool)mRecording} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -156,38 +114,11 @@ public struct AudioDeviceEvent : ICommonEvent<AudioDeviceEvent>, IFormattable, I
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(AudioDeviceId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(AudioDeviceId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(IsRecordingDevice)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(IsRecordingDevice, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite((bool)mRecording, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in AudioDeviceEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.AudioDeviceAdded"/>, <see cref="EventType.AudioDeviceRemoved"/>, or <see cref="EventType.AudioDeviceFormatChanged"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.AudioDeviceAdded"/>, <see cref="EventType.AudioDeviceRemoved"/>, nor <see cref="EventType.AudioDeviceFormatChanged"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator AudioDeviceEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotAudioDeviceEvent();
-		}
-
-		return @event.ADevice;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotAudioDeviceEvent() => throw new ArgumentException($"{nameof(@event)} must be an {nameof(AudioDeviceEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

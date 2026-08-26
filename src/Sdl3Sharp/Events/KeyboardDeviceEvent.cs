@@ -1,4 +1,5 @@
-﻿using Sdl3Sharp.Internal;
+﻿using Sdl3Sharp.Input;
+using Sdl3Sharp.Internal;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -8,23 +9,8 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal KeyboardDeviceEvent KDevice;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="KeyboardDeviceEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="KeyboardDeviceEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in KeyboardDeviceEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> KDevice = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a <see cref="Keyboard">keyboard device</see> is being <see cref="EventType.KeyboardAdded">added</see> into the system or <see cref="EventType.KeyboardRemoved">removed</see> from the system
+/// Represents an event that occurs when a <see cref="Input.Keyboard"/> device is added or removed
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,48 +23,33 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct KeyboardDeviceEvent : ICommonEvent<KeyboardDeviceEvent>, IFormattable, ISpanFormattable
+public partial struct KeyboardDeviceEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.KeyboardAdded or EventType.KeyboardRemoved;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<KeyboardDeviceEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref KeyboardDeviceEvent ICommonEvent<KeyboardDeviceEvent>.GetReference(ref Event @event) => ref @event.KDevice;
-
 	private CommonEvent mCommon;
 	private uint mWhich;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.KeyboardAdded"/> or <see cref="EventType.KeyboardRemoved"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.KeyboardAdded"/> nor <see cref="EventType.KeyboardRemoved"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="KeyboardDeviceEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(KeyboardDeviceEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(KeyboardDeviceEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -90,15 +61,33 @@ public struct KeyboardDeviceEvent : ICommonEvent<KeyboardDeviceEvent>, IFormatta
 	}
 
 	/// <summary>
-	/// Gets or sets the keyboard device ID for the <see cref="Keyboard"/> being <see cref="EventType.KeyboardAdded">added</see> or <see cref="EventType.KeyboardRemoved">removed</see>
+	/// Gets or sets the <see cref="Keyboard.Id">ID</see> of the <see cref="Input.Keyboard"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The keyboard device ID for the <see cref="Keyboard"/> being <see cref="EventType.KeyboardAdded">added</see> or <see cref="EventType.KeyboardRemoved">removed</see>
+	/// The <see cref="Keyboard.Id">ID</see> of the <see cref="Input.Keyboard"/> associated with this event
 	/// </value>
 	public uint KeyboardId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Input.Keyboard"/> associated with this event
+	/// </summary>
+	/// <value>
+	/// The <see cref="Input.Keyboard"/> associated with this event
+	/// </value>
+	public Keyboard Keyboard
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		readonly get
+		{
+			Keyboard.TryGetFromId(mWhich, out var keyboard);
+			return keyboard;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
 	}
 
 	/// <inheritdoc/>
@@ -112,21 +101,8 @@ public struct KeyboardDeviceEvent : ICommonEvent<KeyboardDeviceEvent>, IFormatta
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {KeyboardId}: ")
-							   .Append(KeyboardId.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(KeyboardId)}: {mWhich.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -134,36 +110,9 @@ public struct KeyboardDeviceEvent : ICommonEvent<KeyboardDeviceEvent>, IFormatta
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(KeyboardId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(KeyboardId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in KeyboardDeviceEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.KeyboardAdded"/> or <see cref="EventType.KeyboardRemoved"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.KeyboardAdded"/> nor <see cref="EventType.KeyboardRemoved"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator KeyboardDeviceEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotKeyboardDeviceEvent();
-		}
-
-		return @event.KDevice;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotKeyboardDeviceEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(KeyboardDeviceEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

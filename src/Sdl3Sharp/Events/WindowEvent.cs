@@ -1,4 +1,5 @@
 ﻿using Sdl3Sharp.Internal;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -8,23 +9,46 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal WindowEvent Window;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from an <see cref="WindowEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="WindowEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in WindowEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Window = @event;
-}
-
+#if SDL3_6_0_OR_GREATER
 /// <summary>
-/// Represents an event that occurs when a <see cref="Window"/> changes its state
+/// Represents an event that occurs when a <see cref="Video.Windowing.Window"/> changes its state
+/// </summary>
+/// <remarks>
+/// <para>
+/// Associated <see cref="EventType"/>s:
+/// <list type="bullet">
+/// <item><description><see cref="EventType.WindowShown"/></description></item>
+/// <item><description><see cref="EventType.WindowHidden"/></description></item>
+/// <item><description><see cref="EventType.WindowExposed"/></description></item>
+/// <item><description><see cref="EventType.WindowMoved"/></description></item>
+/// <item><description><see cref="EventType.WindowResized"/></description></item>
+/// <item><description><see cref="EventType.WindowPixelSizeChanged"/></description></item>
+/// <item><description><see cref="EventType.WindowMetalViewResized"/></description></item>
+/// <item><description><see cref="EventType.WindowMinimized"/></description></item>
+/// <item><description><see cref="EventType.WindowMaximized"/></description></item>
+/// <item><description><see cref="EventType.WindowRestored"/></description></item>
+/// <item><description><see cref="EventType.WindowMouseEnter"/></description></item>
+/// <item><description><see cref="EventType.WindowMouseLeave"/></description></item>
+/// <item><description><see cref="EventType.WindowFocusGained"/></description></item>
+/// <item><description><see cref="EventType.WindowFocusLost"/></description></item>
+/// <item><description><see cref="EventType.WindowCloseRequested"/></description></item>
+/// <item><description><see cref="EventType.WindowHitTest"/></description></item>
+/// <item><description><see cref="EventType.WindowIccProfileChanged"/></description></item>
+/// <item><description><see cref="EventType.WindowDisplayChanged"/></description></item>
+/// <item><description><see cref="EventType.WindowDisplayScaleChanged"/></description></item>
+/// <item><description><see cref="EventType.WindowSafeAreaChanged"/></description></item>
+/// <item><description><see cref="EventType.WindowOccluded"/></description></item>
+/// <item><description><see cref="EventType.WindowEnterFullscreen"/></description></item>
+/// <item><description><see cref="EventType.WindowLeaveFullscreen"/></description></item>
+/// <item><description><see cref="EventType.WindowDestroyed"/></description></item>
+/// <item><description><see cref="EventType.WindowHdrStateChanged"/></description></item>
+/// <item><description><see cref="EventType.WindowSettingsChanged"/></description></item>
+/// </list>
+/// </para>
+/// </remarks>
+#else
+/// <summary>
+/// Represents an event that occurs when a <see cref="Video.Windowing.Window"/> changes its state
 /// </summary>
 /// <remarks>
 /// <para>
@@ -58,52 +82,39 @@ partial struct Event
 /// </list>
 /// </para>
 /// </remarks>
+#endif
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct WindowEvent : ICommonEvent<WindowEvent>, IFormattable, ISpanFormattable
+public partial struct WindowEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is >= EventType.WindowShown and <= EventType.WindowHdrStateChanged;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<WindowEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref WindowEvent ICommonEvent<WindowEvent>.GetReference(ref Event @event) => ref @event.Window;
 
 	private CommonEvent mCommon;
 	private uint mWindowID;
 	private int mData1;
 	private int mData2;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be one of the <see cref="EventType"/>.Window* values.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not one of the <see cref="EventType"/>.Window* values
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="WindowEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(WindowEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(WindowEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -115,15 +126,62 @@ public struct WindowEvent : ICommonEvent<WindowEvent>, IFormattable, ISpanFormat
 	}
 
 	/// <summary>
-	/// Gets or sets the window ID of the <see cref="Window"/> which changes it's state
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The window ID of the <see cref="Window"/> which changes it's state
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event
 	/// </value>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event
+	/// </summary>
+	/// <value>
+	/// The <see cref="Video.Windowing.Window"/> associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// If the <see cref="Type"/> of this event is <see cref="EventType.WindowDestroyed"/>, you should not use the <see cref="Video.Windowing.Window"/> returned by this property any longer, as its internal resources will already have been released.
+	/// An exception from this is if you have received this event in a <see cref="EventWatch"/> where you can still use the associated <see cref="Window"/> during the callback, but you should not use it after the callback has returned.
+	/// </para>
+	/// </remarks>
+	/// <exception cref="InvalidOperationException">
+	/// When getting this property, the associated <see cref="Video.Windowing.Window"/> is invalid (e.g. <see cref="WindowId"/> is <c>0</c>)
+	/// </exception>
+	/// <exception cref="ArgumentNullException">
+	/// When setting this property, the given <see cref="Video.Windowing.Window"/> is <c><see langword="null"/></c>
+	/// </exception>
+	public Window Window
+	{
+		readonly get
+		{
+			if (!Window.TryGetFromId(mWindowID, out var window))
+			{
+				[DoesNotReturn]
+				static void failInvalidWindow() => throw new InvalidOperationException($"The associated {nameof(Video.Windowing.Window)} with the {nameof(WindowEvent)} is invalid.");
+
+				failInvalidWindow();
+			}
+
+			return window;
+		}
+
+		set
+		{
+			if (value is null)
+			{
+				[DoesNotReturn]
+				static void failNullWindow() => throw new ArgumentNullException(nameof(value), $"The given {nameof(Video.Windowing.Window)} must not be null.");
+
+				failNullWindow();
+			}
+
+			mWindowID = value.Id;
+		}
 	}
 
 	/// <summary>
@@ -134,41 +192,7 @@ public struct WindowEvent : ICommonEvent<WindowEvent>, IFormattable, ISpanFormat
 	/// </value>
 	/// <remarks>
 	/// <para>
-	/// The value of this property may reflect different data semantics dependent on the <see cref="Type"/>:
-	/// <list type="bullet">
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowExposed"/>
-	///			</term>
-	///			<description>
-	///				<c>1</c> for "live-resize expose" events; otherwise, <c>0</c>
-	///			</description>
-	///		</item>
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowMoved"/>
-	///			</term>
-	///			<description>
-	///				The new horizontal coordinate of the <see cref="Window"/> after it has been moved
-	///			</description>
-	///		</item>
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowResized"/>
-	///			</term>
-	///			<description>
-	///				The new width of the <see cref="Window"/> after it has been resized
-	///			</description>
-	///		</item>
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowPixelSizeChanged"/>
-	///			</term>
-	///			<description>
-	///				The new horizontal pixel size of the <see cref="Window"/> after it has been changed
-	///			</description>
-	///		</item>
-	/// </list>
+	/// The semantics of this property depend on the <see cref="Type"/> of the <see cref="WindowEvent"/>.
 	/// </para>
 	/// </remarks>
 	public int Data1
@@ -185,33 +209,7 @@ public struct WindowEvent : ICommonEvent<WindowEvent>, IFormattable, ISpanFormat
 	/// </value>
 	/// <remarks>
 	/// <para>
-	/// The value of this property may reflect different data semantics dependent on the <see cref="Type"/>:
-	/// <list type="bullet">
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowMoved"/>
-	///			</term>
-	///			<description>
-	///				The new vertical coordinate of the <see cref="Window"/> after it has been moved
-	///			</description>
-	///		</item>
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowResized"/>
-	///			</term>
-	///			<description>
-	///				The new height of the <see cref="Window"/> after it has been resized
-	///			</description>
-	///		</item>
-	///		<item>
-	///			<term>
-	///				<see cref="EventType.WindowPixelSizeChanged"/>
-	///			</term>
-	///			<description>
-	///				The new vertical pixel size of the <see cref="Window"/> after it has been changed
-	///			</description>
-	///		</item>
-	/// </list>
+	/// The semantics of this property depend on the <see cref="Type"/> of the <see cref="WindowEvent"/>.
 	/// </para>
 	/// </remarks>
 	public int Data2
@@ -231,25 +229,10 @@ public struct WindowEvent : ICommonEvent<WindowEvent>, IFormattable, ISpanFormat
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							   .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append($", {nameof(Data1)}: ")
-							   .Append(Data1.ToString(format, formatProvider))
-							   .Append($", {nameof(Data2)}: ")
-							   .Append(Data2.ToString(format, formatProvider))
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+			nameof(Data1)}: {mData1.ToString(format, formatProvider)}, {
+			nameof(Data2)}: {mData2.ToString(format, formatProvider)} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -257,40 +240,13 @@ public struct WindowEvent : ICommonEvent<WindowEvent>, IFormattable, ISpanFormat
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Data1)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Data1, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mData1, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Data2)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Data2, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mData2, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in WindowEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be one of the <see cref="EventType"/>.Window* values.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not one of the <see cref="EventType"/>.Window* values
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator WindowEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotWindowEvent();
-		}
-
-		return @event.Window;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotWindowEvent() => throw new ArgumentException($"{nameof(@event)} must be a {nameof(WindowEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

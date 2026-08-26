@@ -214,7 +214,7 @@ public readonly partial struct Keyboard :
 	/// then the pressed state will never show up in the value returned by this property.
 	/// </para>
 	/// <para>
-	/// To update the key states returned by this property, call <see cref="SDL_PumpEvents()"/>.
+	/// To update the key states returned by this property, call <see cref="EventQueue.PumpEvents"/>.
 	/// </para>
 	/// <para>
 	/// Note that this property doesn't take into account whether shift has been pressed or not.

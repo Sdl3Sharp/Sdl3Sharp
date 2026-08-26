@@ -1,6 +1,7 @@
 ﻿using Sdl3Sharp.Input;
 using Sdl3Sharp.Internal;
 using Sdl3Sharp.Internal.Interop;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -10,23 +11,8 @@ using System.Runtime.InteropServices;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal KeyboardEvent Key;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="KeyboardEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="KeyboardEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in KeyboardEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> Key = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when a keyboard key is being <see cref="EventType.KeyDown">pressed</see> or <see cref="EventType.KeyUp">released</see>
+/// Represents an event that occurs when a key is pressed or released
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,19 +25,10 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFormattable
+public partial struct KeyboardEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.KeyDown or EventType.KeyUp;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<KeyboardEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref KeyboardEvent ICommonEvent<KeyboardEvent>.GetReference(ref Event @event) => ref @event.Key;
 
 	private CommonEvent mCommon;
 	private uint mWindowID;
@@ -63,31 +40,25 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 	private CBool mDown;
 	private CBool mRepeat;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be either <see cref="EventType.KeyDown"/> or <see cref="EventType.KeyUp"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was neither <see cref="EventType.KeyDown"/> nor <see cref="EventType.KeyUp"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="KeyboardEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(KeyboardEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(KeyboardEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -99,11 +70,16 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with keyboard focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with keyboard focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="KeyboardEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
@@ -111,15 +87,60 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 	}
 
 	/// <summary>
-	/// Gets or sets the keyboard device Id of the <see cref="Keyboard"/> whose key state changed
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The keyboard device Id of the <see cref="Keyboard"/> whose key state changed, or <c>0</c> if unknown or virtual
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="KeyboardEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Keyboard.Id">ID</see> of the <see cref="Input.Keyboard"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Keyboard.Id">ID</see> of the <see cref="Input.Keyboard"/> associated with this event, or <c>0</c> if the keyboard is unknown or virtual
 	/// </value>
 	public uint KeyboardId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWhich;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Input.Keyboard"/> associated with this event, if any
+	/// </summary>
+	/// <value>
+	/// The <see cref="Input.Keyboard"/> associated with this event, or <c><see langword="null"/></c> if the keyboard is unknown or virtual
+	/// </value>
+	public Keyboard? Keyboard
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		readonly get
+		{
+			if (Input.Keyboard.TryGetFromId(mWhich, out var keyboard))
+			{
+				return keyboard;
+			}
+
+			return null;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		set => mWhich = value?.Id ?? 0;
 	}
 
 	/// <summary>
@@ -143,7 +164,7 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 	/// <remarks>
 	/// <para>
 	/// This property reflects the base <see cref="Input.Keycode"/> generated by pressing the <see cref="Scancode"/> using the current keyboard layout, applying any options specified via <see cref="Hint.KeycodeOptions"/>.
-	/// You can get the <see cref="Keycode"/> corresponding to the event <see cref="Scancode"/> and <see cref="Modifier"/> directly from the keyboard layout, bypassing <see cref="Hint.KeycodeOptions"/>, by calling <see cref="KeycodeExtensions.TryGetFromScancode(Scancode, Keymod, out Keycode)"/>.
+	/// You can get the <see cref="Keycode"/> corresponding to the event <see cref="Scancode"/> and <see cref="Modifiers"/> directly from the keyboard layout, bypassing <see cref="Hint.KeycodeOptions"/>, by calling <see cref="KeycodeExtensions.TryGetFromScancode(Scancode, Keymod, out Keycode)"/>.
 	/// </para>
 	/// </remarks>
 	public Keycode Keycode
@@ -158,17 +179,17 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 	/// <value>
 	/// The current key modifiers
 	/// </value>
-	public Keymod Modifier
+	public Keymod Modifiers
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mMod;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mMod = value;
 	}
 
 	/// <summary>
-	/// Gets or sets the raw platform dependent scancode for this event
+	/// Gets or sets the raw platform dependent scancode 
 	/// </summary>
 	/// <value>
-	/// The raw platform dependent scancode for this event
+	/// The raw platform dependent scancode
 	/// </value>
 	public ushort Raw
 	{
@@ -177,10 +198,10 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 	}
 
 	/// <summary>
-	/// Gets or sets a value indicating whether the key is pressed
+	/// Gets or sets a value indicating whether the key is pressed (currently held down)
 	/// </summary>
 	/// <value>
-	/// A value indicating whether the key is pressed
+	/// A value indicating whether the key is pressed (currently held down)
 	/// </value>
 	public bool IsDown
 	{
@@ -211,35 +232,15 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-	{
-		var builder = Shared.StringBuilder;
-		try
-		{
-			return ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-				               .Append($", {nameof(WindowId)}: ")
-							   .Append(WindowId.ToString(format, formatProvider))
-							   .Append($", {nameof(KeyboardId)}: ")
-							   .Append(KeyboardId.ToString(format, formatProvider))
-							   .Append($", {nameof(Scancode)}: ")
-							   .Append(Scancode.ToString())
-							   .Append($", {nameof(Keycode)}: ")
-							   .Append(Keycode.ToString())
-							   .Append($", {nameof(Modifier)}: ")
-							   .Append(Modifier.ToString())
-							   .Append($", {nameof(Raw)}: ")
-							   .Append(Raw.ToString(format, formatProvider))
-							   .Append($", {nameof(IsDown)}: ")
-							   .Append(IsDown)
-							   .Append($", {nameof(IsRepeat)}: ")
-							   .Append(IsRepeat)
-							   .Append(" }")
-							   .ToString();
-		}
-		finally
-		{
-			builder.Clear();
-		}
-	}
+		=> $"{{ {mCommon.ToPartialString()}, {
+			nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+			nameof(KeyboardId)}: {mWhich.ToString(format, formatProvider)}, {
+			nameof(Scancode)}: {mScancode}, {
+			nameof(Keycode)}: {mKey}, {
+			nameof(Modifiers)}: {mMod}, {
+			nameof(Raw)}: {mRaw.ToString(format, formatProvider)}, {
+			nameof(IsDown)}: {(bool)mDown}, {
+			nameof(IsRepeat)}: {(bool)mRepeat} }}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -247,50 +248,23 @@ public struct KeyboardEvent : ICommonEvent<KeyboardEvent>, IFormattable, ISpanFo
 		charsWritten = 0;
 
 		return SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-			&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(KeyboardId)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(KeyboardId, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mWhich, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(Scancode)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Scancode, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mScancode, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(Keycode)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Keycode, ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite($", {nameof(Modifier)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Modifier, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mKey, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite($", {nameof(Modifiers)}: ", ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite(mMod, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(Raw)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(Raw, ref destination, ref charsWritten, format, provider)
+			&& SpanFormat.TryWrite(mRaw, ref destination, ref charsWritten, format, provider)
 			&& SpanFormat.TryWrite($", {nameof(IsDown)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(IsDown, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite((bool)mDown, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite($", {nameof(IsRepeat)}: ", ref destination, ref charsWritten)
-			&& SpanFormat.TryWrite(IsRepeat, ref destination, ref charsWritten)
+			&& SpanFormat.TryWrite((bool)mRepeat, ref destination, ref charsWritten)
 			&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in KeyboardEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be either <see cref="EventType.KeyDown"/> or <see cref="EventType.KeyUp"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was neither <see cref="EventType.KeyDown"/> nor <see cref="EventType.KeyUp"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator KeyboardEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotKeyboardEvent();
-		}
-
-		return @event.Key;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotKeyboardEvent() => throw new ArgumentException($"{nameof(@event)} must be an {nameof(KeyboardEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

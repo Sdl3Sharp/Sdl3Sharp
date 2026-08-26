@@ -1,36 +1,22 @@
 ﻿using Sdl3Sharp.Internal;
 using Sdl3Sharp.Internal.Interop;
+using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 
 namespace Sdl3Sharp.Events;
 
-partial struct Event
-{
-	[FieldOffset(0)] internal TextEditingCandidatesEvent EditCandidates;
-
-	/// <summary>
-	/// Creates a new <see cref="Event"/> from a <see cref="TextEditingCandidatesEvent"/>
-	/// </summary>
-	/// <param name="event">The <see cref="TextEditingCandidatesEvent"/> to store into the newly created <see cref="Event"/></param>
-	public Event(in TextEditingCandidatesEvent @event) :
-#pragma warning disable IDE0034 // Leave it for explicitness sake
-		this(default(IUnsafeConstructorDispatch?))
-#pragma warning restore IDE0034
-		=> EditCandidates = @event;
-}
-
 /// <summary>
-/// Represents an event that occurs when the list of keyboard IME candidates is displayed, shall be displayed, or changes
+/// Represents an event that occurs when a list of keyboard IME candidates is displayed or updated
 /// </summary>
 /// <remarks>
 /// <para>
-/// Associated <see cref="EventType"/>s:
+/// Associated <see cref="EventType"/>:
 /// <list type="bullet">
 /// <item><description><see cref="EventType.TextEditingCandidates"/></description></item>
 /// </list>
@@ -38,53 +24,38 @@ partial struct Event
 /// </remarks>
 [DebuggerDisplay($"{{{nameof(DebuggerDisplay)},nq}}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct TextEditingCandidatesEvent : ICommonEvent<TextEditingCandidatesEvent>, IFormattable, ISpanFormattable
+public partial struct TextEditingCandidatesEvent : IFormattable, ISpanFormattable
 {
 	[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 	private readonly string DebuggerDisplay => ToString(formatProvider: CultureInfo.InvariantCulture);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static bool Accepts(EventType type) => type is EventType.TextEditingCandidates;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static bool ICommonEvent<TextEditingCandidatesEvent>.Accepts(EventType type) => Accepts(type);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	static ref TextEditingCandidatesEvent ICommonEvent<TextEditingCandidatesEvent>.GetReference(ref Event @event) => ref @event.EditCandidates;
-
 	private CommonEvent mCommon;
 	private uint mWindowID;
-	private unsafe readonly byte** mCandidates;
-	private int mNumCandidates;
+	private readonly byte** mCandidates; // There's no safe way to set this field from the managed side, that's why it's readonly.
+	private readonly int mNumCandidates; // Since `mCandidates` is readonly, this field is also should be readonly as well.
 	private int mSelectedCandidate;
 	private CBool mHorizontal;
 	private readonly byte mPadding1, mPadding2, mPadding3;
 
-	/// <remarks>
-	/// <para>
-	/// When setting this property, the value must be <see cref="EventType.TextEditingCandidates"/>.
-	/// Otherwise, it will lead the property to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// When setting this property, the value was not <see cref="EventType.TextEditingCandidates"/>
-	/// </exception>
 	/// <inheritdoc/>
-	public EventType Type
+	/// <exception cref="ArgumentException">
+	/// When setting this property, the given <see cref="EventType"/> is not a valid type for a <see cref="TextEditingCandidatesEvent"/>
+	/// </exception>
+	public required EventType Type
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mCommon.Type;
 
 		set
 		{
-			if (!Accepts(value))
+			if (!AcceptsEventType(value))
 			{
-				failValueArgumentIsNotValid();
+				[DoesNotReturn]
+				static void failInvalidEventType(EventType type) => throw new ArgumentException($"Invalid event type for {nameof(TextEditingCandidatesEvent)}: {type}.", nameof(value));
+
+				failInvalidEventType(value);
 			}
 
 			mCommon.Type = value;
-
-			[DoesNotReturn]
-			static void failValueArgumentIsNotValid() => throw new ArgumentException($"The given {nameof(value)} is not a valid value for the {nameof(Type)} of a {nameof(TextEditingCandidatesEvent)}", paramName: nameof(value));
 		}
 	}
 
@@ -96,11 +67,16 @@ public struct TextEditingCandidatesEvent : ICommonEvent<TextEditingCandidatesEve
 	}
 
 	/// <summary>
-	/// Gets or sets the window Id of the <see cref="Window"/> with keyboard focus, if any
+	/// Gets or sets the <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The window Id of the <see cref="Window"/> with keyboard focus, if any, or <c>0</c>
+	/// The <see cref="Window.Id">ID</see> of the <see cref="Video.Windowing.Window"/> associated with this event, or <c>0</c> if no window is associated with this event
 	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="TextEditingCandidatesEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
 	public uint WindowId
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mWindowID;
@@ -108,60 +84,89 @@ public struct TextEditingCandidatesEvent : ICommonEvent<TextEditingCandidatesEve
 	}
 
 	/// <summary>
-	/// Gets the list of keyboard IME candidates
+	/// Gets or sets the <see cref="Video.Windowing.Window"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The list of keyboard IME candidates
+	/// The <see cref="Video.Windowing.Window"/> associated with this event, or <c><see langword="null"/></c> if no window is associated with this event
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// The associated <see cref="Video.Windowing.Window"/> with a <see cref="TextEditingCandidatesEvent"/> is most likely the window that currently has keyboard focus, if any.
+	/// </para>
+	/// </remarks>
+	public Window? Window
+	{
+		readonly get
+		{
+			Window.TryGetFromId(mWindowID, out var window);
+			return window;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWindowID = value?.Id ?? 0;
+	}
+
+	/// <summary>
+	/// Gets a collection of keyboard IME candidates
+	/// </summary>
+	/// <value>
+	/// A collection of keyboard IME candidates, or an empty collection if there are no candidates
 	/// </value>
 	/// <remarks>
 	/// <para>
 	/// Reading this property can be very expensive, you should consider caching it's value.
 	/// </para>
-	/// <para>
-	/// Setting this property is not supported and will lead the property to throw a <see cref="NotSupportedException"/>.
-	/// </para>
 	/// </remarks>
-	/// <exception cref="NotSupportedException">When setting this property</exception>
-	public string[] Candidates
+	public readonly string[] Candidates
 	{
-		readonly get
+		get
 		{
 			unsafe
 			{
-				var candidates = mCandidates;
-				var numCandidates = mNumCandidates;
+				var candidatesPtr = mCandidates;
 
-				if (candidates is null || numCandidates is not > 0)
+				if (candidatesPtr is null || mNumCandidates is not > 0)
 				{
 					return [];
 				}
 
-				var result = GC.AllocateUninitializedArray<string>(numCandidates);
+				var candidates = GC.AllocateUninitializedArray<string>(mNumCandidates);
 
-				foreach (ref var candidate in result.AsSpan())
+				foreach (ref var candidate in candidates.AsSpan())
 				{
-					candidate = Utf8StringMarshaller.ConvertToManaged(*candidates++) ?? string.Empty;
+					using var candidateUtf16 = NativeStrings.FromUtf8ToUtf16(*candidatesPtr++);
+					candidate = candidateUtf16.ToManaged()!;
 				}
 
-				return result;
+				return candidates;
 			}
 		}
-
-		[Obsolete($"Setting {nameof(Candidates)} is not supported yet.")]
-		[DoesNotReturn]
-		set => throw new NotSupportedException($"Setting {nameof(Candidates)} is not supported");
 	}
 
 	/// <summary>
-	/// Gets or sets the index of the selected keyboard IME candidate into the <see cref="Candidates"/> list
+	/// Gets or sets the index of the selected keyboard IME candidate into the <see cref="Candidates"/> collection
 	/// </summary>
 	/// <value>
-	/// The index of the selected keyboard IME candidate into the <see cref="Candidates"/> list, or <c>-1</c> if no candidate is selected
+	/// The index of the selected keyboard IME candidate into the <see cref="Candidates"/> collection, or <c>-1</c> if no candidate is selected
 	/// </value>
-	public int SelectedCandidate
+	/// <exception cref="ArgumentOutOfRangeException">
+	/// When setting this property, the given value is out of range for the <see cref="Candidates"/> collection and not equal to <c>-1</c>
+	/// </exception>
+	public int SelectedCandidateIndex
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mSelectedCandidate;
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mSelectedCandidate = value is not < 0 ? value : -1;
+		
+		set
+		{
+			if (value is < -1 || value >= mNumCandidates)
+			{
+				[DoesNotReturn]
+				static void failInvalidSelectedCandidateIndex(int value) => throw new ArgumentOutOfRangeException(nameof(value), value, $"The given selected candidate index is out of range for the {nameof(TextEditingCandidatesEvent)}.");
+
+				failInvalidSelectedCandidateIndex(value);
+			}
+
+			mSelectedCandidate = value;
+		}
 	}
 
 	/// <summary>
@@ -189,45 +194,12 @@ public struct TextEditingCandidatesEvent : ICommonEvent<TextEditingCandidatesEve
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
 	{
 		unsafe
-		{
-			var builder = Shared.StringBuilder;
-			try
-			{
-				ICommonEvent.PartiallyAppend(in this, builder.Append("{ "), format)
-							.Append($", {nameof(WindowId)}: ")
-							.Append(WindowId.ToString(format, formatProvider))
-							.Append($", {nameof(Candidates)}: [");
-
-				var candidates = mCandidates;
-				var candidatesEnd = mCandidates + mNumCandidates;
-
-				if (candidates is not null && candidates < candidatesEnd)
-				{
-					builder.Append(" \"")
-						   .Append(Utf8StringMarshaller.ConvertToManaged(*candidates++) ?? string.Empty)
-						   .Append('"');
-
-					while (candidates < candidatesEnd)
-					{
-						builder.Append(", \"")
-							   .Append(Utf8StringMarshaller.ConvertToManaged(*candidates++) ?? string.Empty)
-							   .Append('"');
-					}
-
-					builder.Append(' ');
-				}
-
-				return builder.Append($"], {nameof(SelectedCandidate)}: ")
-							  .Append(SelectedCandidate.ToString(format, formatProvider))
-							  .Append($", {nameof(IsHorizontal)}: ")
-							  .Append(IsHorizontal)
-							  .Append(" }")
-							  .ToString();
-			}
-			finally
-			{
-				builder.Clear();
-			}
+		{ 
+			return $"{{ {mCommon.ToPartialString()}, {
+				nameof(WindowId)}: {mWindowID.ToString(format, formatProvider)}, {
+				nameof(Candidates)}: [{(mNumCandidates is > 0 ? $" {string.Join(", ", NativeStrings.EnumerateFromUtf8ToUtf16(mCandidates, mNumCandidates).Select(static c => c is not null ? $"\"{c}\"" : "null"))} " : string.Empty)}], {
+				nameof(SelectedCandidateIndex)}: {mSelectedCandidate.ToString(format, formatProvider)}, {
+				nameof(IsHorizontal)}: {mHorizontal} }}";
 		}
 	}
 
@@ -238,34 +210,69 @@ public struct TextEditingCandidatesEvent : ICommonEvent<TextEditingCandidatesEve
 		{
 			charsWritten = 0;
 
-			if ( !(SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
-				&& ICommonEvent.TryPartiallyFormat(in this, ref destination, ref charsWritten, format)
+			if (!(SpanFormat.TryWrite("{ ", ref destination, ref charsWritten)
+				&& mCommon.TryPartiallyFormat(ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite($", {nameof(WindowId)}: ", ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite(WindowId, ref destination, ref charsWritten, format, provider)
+				&& SpanFormat.TryWrite(mWindowID, ref destination, ref charsWritten, format, provider)
 				&& SpanFormat.TryWrite($", {nameof(Candidates)}: [", ref destination, ref charsWritten)))
 			{
 				return false;
 			}
 
-			var candidates = mCandidates;
-			var candidatesEnd = candidates + mNumCandidates;
-
-			if (candidates is not null && candidates < candidatesEnd)
+			if (mCandidates is not null && mNumCandidates is > 0)
 			{
-				if ( !(SpanFormat.TryWrite(" \"", ref destination, ref charsWritten)
-					&& SpanFormat.TryWriteUtf8(MemoryMarshal.CreateReadOnlySpanFromNullTerminated(*candidates++), ref destination, ref charsWritten)
-					&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+				if (!SpanFormat.TryWrite(' ', ref destination, ref charsWritten))
 				{
-					return false; 
+					return false;
 				}
 
-				while (candidates < candidatesEnd)
+				var candidatesPtr = mCandidates;
+
 				{
-					if ( !(SpanFormat.TryWrite(", \"", ref destination, ref charsWritten)
-						&& SpanFormat.TryWriteUtf8(MemoryMarshal.CreateReadOnlySpanFromNullTerminated(*candidates++), ref destination, ref charsWritten)
-						&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+					using var candidateUtf16 = NativeStrings.FromUtf8ToUtf16(*candidatesPtr++);
+					
+					if (candidateUtf16.Buffer is not null)
 					{
-						return false; 
+						if (!(SpanFormat.TryWrite('"', ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite(candidateUtf16.AsSpan(), ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+						{
+							return false;
+						}
+					}
+					else
+					{
+						if (!SpanFormat.TryWrite("null", ref destination, ref charsWritten))
+						{
+							return false;
+						}
+					}
+				}
+
+				for (var i = 1; i < mNumCandidates; i++)
+				{
+					if (!SpanFormat.TryWrite(", ", ref destination, ref charsWritten))
+					{
+						return false;
+					}
+
+					using var candidateUtf16 = NativeStrings.FromUtf8ToUtf16(*candidatesPtr++);
+					
+					if (candidateUtf16.Buffer is not null)
+					{
+						if (!(SpanFormat.TryWrite('"', ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite(candidateUtf16.AsSpan(), ref destination, ref charsWritten)
+							&& SpanFormat.TryWrite('"', ref destination, ref charsWritten)))
+						{
+							return false;
+						}
+						else
+						{
+							if (!SpanFormat.TryWrite("null", ref destination, ref charsWritten))
+							{
+								return false;
+							}
+						}
 					}
 				}
 
@@ -275,38 +282,11 @@ public struct TextEditingCandidatesEvent : ICommonEvent<TextEditingCandidatesEve
 				}
 			}
 
-			return SpanFormat.TryWrite($"], {nameof(SelectedCandidate)}: ", ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite(SelectedCandidate, ref destination, ref charsWritten, format, provider)
+			return SpanFormat.TryWrite($"], {nameof(SelectedCandidateIndex)}: ", ref destination, ref charsWritten)
+				&& SpanFormat.TryWrite(mSelectedCandidate, ref destination, ref charsWritten, format, provider)
 				&& SpanFormat.TryWrite($", {nameof(IsHorizontal)}: ", ref destination, ref charsWritten)
-				&& SpanFormat.TryWrite(IsHorizontal, ref destination, ref charsWritten)
+				&& SpanFormat.TryWrite((bool)mHorizontal, ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 		}
-	}
-
-	/// <inheritdoc/>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static implicit operator Event(in TextEditingCandidatesEvent @event) => new(in @event);
-
-	/// <remarks>
-	/// <para>
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> must be <see cref="EventType.TextEditingCandidates"/>.
-	/// Otherwise, it will lead the method to throw an <see cref="ArgumentException"/>!
-	/// </para>
-	/// </remarks>
-	/// <exception cref="ArgumentException">
-	/// The <see cref="Event.Type"/> of the given <paramref name="event"/> was not <see cref="EventType.TextEditingCandidates"/>
-	/// </exception>
-	/// <inheritdoc/>
-	public static explicit operator TextEditingCandidatesEvent(in Event @event)
-	{
-		if (!Accepts(@event.Type))
-		{
-			failEventArgumentIsNotTextEditingCandidateEvent();
-		}
-
-		return @event.EditCandidates;
-
-		[DoesNotReturn]
-		static void failEventArgumentIsNotTextEditingCandidateEvent() => throw new ArgumentException($"{nameof(@event)} must be an {nameof(TextEditingCandidatesEvent)} by {nameof(Type)}", paramName: nameof(@event));
 	}
 }

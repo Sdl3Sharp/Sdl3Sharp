@@ -149,7 +149,7 @@ public readonly partial struct Mouse :
 	/// This property should only be accessed from the main thread.
 	/// </para>
 	/// </remarks>
-	public static (MouseButtonFlags Button, float X, float Y) GlobalState
+	public static (MouseButtonFlags Buttons, float X, float Y) GlobalState
 	{
 		get
 		{
