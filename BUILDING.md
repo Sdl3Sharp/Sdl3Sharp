@@ -162,3 +162,24 @@ The project's build configuration lives in [`make.json`](./make.json).
 > `cacheDir` and `tempDir` must remain subdirectories of `./src` for `Directory.Build.props` and `Directory.Build.targets` to work correctly. Avoid changing these unless you know exactly why you need to.
 
 For other configuration properties and command-line options, refer to the [make.cs README](https://github.com/Sdl3Sharp/make.cs/blob/main/README.md).
+
+## Known issues
+
+### .NET 11 preview 7 CLI test-build instability (file lock / apphost copy failure)
+
+We have observed intermittent failures when building test projects with the **.NET SDK `11.0.100-preview.7.26381.103`** via the `dotnet` CLI.
+
+Typical symptoms include:
+
+- `MSB3030` while building test projects, e.g.:
+  - `...obj\Debug\net10.0\apphost.exe` could not be copied because it was not found
+- lingering `MSBuild` processes after a failed build
+- `dotnet nuget locals --clear all` failing until those lingering processes are terminated due to locked files in `.packages` (for example `Microsoft.Testing.Platform` / `xunit.v3` task assemblies)
+
+At the time of writing, this appears to be a toolchain issue affecting this SDK preview in our environment.
+
+**Workarounds:**
+
+- Build and run tests from Visual Studio (works in our tests with current VS 2026 builds/toolsets)
+- Use a stable SDK (for example .NET 10) for CLI builds until a newer .NET 11 preview/RC resolves the issue
+- If needed after a failed build, terminate lingering `MSBuild` processes before clearing NuGet caches
