@@ -1,4 +1,6 @@
 <Project>
+    <Import Project="GenerateSdlDefines.targets" />
+    
     <PropertyGroup Condition="'$(MakeFlavor)' == 'rid' And '$(MakeFlavorRid)' != ''">
         <PackageId>$(PackageId).$(MakeFlavorRid)</PackageId>
         <Description>$(Description) - "$(MakeFlavorRid)" package - just contains the native binaries for $(MakeFlavorRid) and references the "Core" package</Description>

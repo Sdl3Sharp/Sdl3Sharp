@@ -1,0 +1,49 @@
+# ╭────────────────────────────────────────────────────────────────────────────╮
+# │ This file lists native SDL versions supported by SDL3#                     │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │ For each SDL version in the format "x.y.z" listed here,                    │
+# │ up to what's defined in "make.json" as "runtimesVersion" (≤),              │
+# │ a C# preprocessor symbol called "SDLx_y_z_OR_GREATER" will be defined.     │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │ Once a new native SDL version is released (not a SDL3# release!),          │
+# │ it should be added here if it is supported (we support most SDL versions). │
+# ╰────────────────────────────────────────────────────────────────────────────╯
+
+# ╭───────────────────╮
+# │ 3.2.x releases    │
+# ╰───────────────────╯
+
+3.2.0 # SDL's first official release of the 3.x series, we'll start our official support here too
+3.2.2
+3.2.4
+3.2.6
+3.2.8
+3.2.10
+3.2.12
+3.2.14
+3.2.16
+3.2.18
+3.2.20
+3.2.22 # The first SDL 3 version we ship with SDL3# (and therefore officially support)
+3.2.24
+3.2.26
+3.2.28
+3.2.30 # For some reason we don't ship that version, but we implicitly support it, since we support higher versions as well
+
+# ╭───────────────────╮
+# │ 3.3.x releases    │
+# ╰───────────────────╯
+
+# 3.3.x releases are not supported by us, because SDL uses odd minor versions as development versions for next even minor version releases
+
+# ╭───────────────────╮
+# │ 3.4.x releases    │
+# ╰───────────────────╯
+
+3.4.0
+3.4.2
+3.4.6 # We don't ship that version, because 3.4.6 contained a critical bug that was hotfixed in 3.4.8, still we register it as a supported version
+3.4.8
+3.4.10
+3.4.12
+3.4.14

@@ -1,0 +1,180 @@
+<Project>
+	<!--
+		Vendored task dependencies.
+
+		These dependencies are shipped as binaries as part of the repository and are needed because of the limitations of `RoslynCodeTaskFactory`.
+		We can't restore them as part of the normal NuGet restore process.
+	-->
+	<PropertyGroup>
+		<VendoredTaskDepsDir>$(MSBuildThisFileDirectory)..\vendor</VendoredTaskDepsDir>
+
+		<VendoredSystemMemoryVersion>4.6.3</VendoredSystemMemoryVersion>		
+		<VendoredSystemMemoryPath>$(VendoredTaskDepsDir)\system.memory.$(VendoredSystemMemoryVersion)\lib\netstandard2.0\System.Memory.dll</VendoredSystemMemoryPath>
+
+		<VendoredSystemTextJsonVersion>10.0.11</VendoredSystemTextJsonVersion>
+		<VendoredSystemTextJsonPath>$(VendoredTaskDepsDir)\system.text.json.$(VendoredSystemTextJsonVersion)\lib\netstandard2.0\System.Text.Json.dll</VendoredSystemTextJsonPath>
+	</PropertyGroup>
+    
+	<!-- Validate that the vendored task dependencies exist -->
+	<Target
+		Name="ValidateVendoredTaskDependencies"
+		BeforeTargets="PrepareForBuild">
+		<Error Condition="!Exists('$(VendoredSystemMemoryPath)')" Text="Vendored System.Memory.dll not found at $(VendoredSystemMemoryPath). See vendor/README.md for setup instructions." />
+		<Error Condition="!Exists('$(VendoredSystemTextJsonPath)')" Text="Vendored System.Text.Json.dll not found at $(VendoredSystemTextJsonPath). See vendor/README.md for setup instructions." />
+	</Target>
+
+	<!-- Define the SDLx_y_z_OR_GREATER preprocessor symbols using a RoslynCodeTaskFactory task -->
+    <UsingTask
+        TaskName="GenerateSdlDefines"
+        TaskFactory="RoslynCodeTaskFactory"
+        AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        
+        <ParameterGroup>
+            <MakeJsonPath ParameterType="System.String" Required="true" />
+            <SdlVersionsTxtPath ParameterType="System.String" Required="true" />
+            <GeneratedSdlDefines ParameterType="System.String" Output="true" />
+        </ParameterGroup>        
+        
+        <Task>
+			<!-- References to vendored task dependencies -->
+            <Reference Include="$(VendoredSystemMemoryPath)" />
+            <Reference Include="$(VendoredSystemTextJsonPath)" />
+            
+			<!-- Using directives for the task implementation -->
+            <Using Namespace="System" />
+            <Using Namespace="System.Collections.Generic" />
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Linq" />
+            <Using Namespace="System.Text.Json" />
+
+			<!-- The actual task implementation -->
+            <Code Type="Fragment" Language="csharp">
+                <![CDATA[                
+                if (!File.Exists(MakeJsonPath))
+				{
+					Log.LogError($"File not found: \"{MakeJsonPath}\".");
+					return false;
+				}
+
+				Version runtimesVersion;
+				try
+				{
+					using (var makeJson = File.OpenRead(MakeJsonPath))
+					using (var makeJsonDoc = JsonDocument.Parse(makeJson))
+					{
+
+						if (!makeJsonDoc.RootElement.TryGetProperty("runtimesVersion", out var runtimesVersionElement))
+						{
+							Log.LogError($"Property \"runtimesVersion\" not found in \"{MakeJsonPath}\".");
+
+							return false;
+						}
+
+						var runtimesVersionString = runtimesVersionElement.GetString();
+						if (!Version.TryParse(runtimesVersionString, out runtimesVersion))
+						{
+							Log.LogError($"Property \"runtimesVersion\" in \"{MakeJsonPath}\" has an invalid format: \"{runtimesVersionString}\".");
+
+							return false;
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					Log.LogError($"Failed to read or parse \"{MakeJsonPath}\": [{e.GetType().Name}] {e.Message}");
+
+					return false;
+				}
+
+				string[] generatedSdlDefines;
+				if (!File.Exists(SdlVersionsTxtPath))
+				{
+					// We don't fail early in this case because we can still set the SDL* preprocessor symbol for the exact runtimes version
+
+					Log.LogWarning($"File not found: \"{SdlVersionsTxtPath}\". No \"SDL*_OR_GREATER\" preprocessor symbols will be defined.");
+
+					generatedSdlDefines = Array.Empty<string>();
+				}
+				else
+				{
+					var sdlVersions = new List<Version>();
+
+					try
+					{
+						var lineNumber = 0;
+						foreach (var line in File.ReadLines(SdlVersionsTxtPath))
+						{
+							lineNumber++;
+							var lineSpan = line.AsSpan();
+
+							var commentStart = lineSpan.IndexOf('#');
+							if (commentStart >= 0)
+							{
+								lineSpan = lineSpan.Slice(0, commentStart);
+							}
+
+							lineSpan = lineSpan.Trim();
+
+							if (lineSpan.IsEmpty)
+							{
+								continue;
+							}
+
+							if (!Version.TryParse(lineSpan.ToString(), out var sdlVersion))
+							{
+								Log.LogWarning($"Line {lineNumber} in \"{SdlVersionsTxtPath}\" has an invalid version format: \"{line}\". Skipping this invalid line.");
+
+								continue;
+							}
+
+							sdlVersions.Add(sdlVersion);
+						}
+
+						generatedSdlDefines = sdlVersions
+							.Distinct()
+							.Where(sdlVersion => sdlVersion <= runtimesVersion)
+							.OrderBy(sdlVersion => sdlVersion)
+							.Select(sdlVersion => $"SDL{sdlVersion.Major}_{sdlVersion.Minor}_{sdlVersion.Build}_OR_GREATER") // Generate SDL*_OR_GREATER preprocessor symbols for each SDL version <= runtimes version
+							.ToArray();
+					}
+					catch (Exception e)
+					{
+						// We don't fail in this case because we can still set the SDL* preprocessor symbol for the exact runtimes version
+
+						Log.LogWarning($"Failed to read or parse \"{SdlVersionsTxtPath}\": [{e.GetType().Name}] {e.Message}. No \"SDL*_OR_GREATER\" preprocessor symbols will be defined.");
+
+						generatedSdlDefines = Array.Empty<string>();
+					}
+				}
+
+				GeneratedSdlDefines = string.Join(";", generatedSdlDefines
+					.Append($"SDL{runtimesVersion.Major}_{runtimesVersion.Minor}_{runtimesVersion.Build}") // Generate a SDL* preprocessor symbol for the exact runtimes version as well
+				);
+
+				Log.LogMessage(MessageImportance.Low, $"Generated SDL*_OR_GREATER preprocessor symbols ({generatedSdlDefines.Length}). Runtimes version: {runtimesVersion.ToString(3)}.");
+                ]]>
+            </Code>
+        </Task>        
+    </UsingTask>
+
+    <Target
+        Name="GenerateSdlDefines"
+        BeforeTargets="CoreCompile">
+        
+        <PropertyGroup>
+            <_MakeJsonPath>$(MSBuildThisFileDirectory)..\make.json</_MakeJsonPath>
+            <_SdlVersionsTxtPath>$(MSBuildThisFileDirectory)..\sdl-versions.txt</_SdlVersionsTxtPath>
+        </PropertyGroup>
+
+        <GenerateSdlDefines
+            MakeJsonPath="$(_MakeJsonPath)"
+			SdlVersionsTxtPath="$(_SdlVersionsTxtPath)">
+            
+            <Output TaskParameter="GeneratedSdlDefines" PropertyName="_GeneratedSdlDefines" />
+        </GenerateSdlDefines>
+
+        <PropertyGroup>
+            <DefineConstants>$(DefineConstants);$(_GeneratedSdlDefines)</DefineConstants>
+        </PropertyGroup>
+    </Target>
+</Project>
