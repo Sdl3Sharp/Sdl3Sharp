@@ -15,6 +15,19 @@ In contrast to the [promoted C# bindings (SDL3-CS)](https://github.com/flibitiji
 Every part of the API is deliberately designed to feel native to C#, translating SDL's functionality into idiomatic, well thought-out counterparts that existing C# users should feel right at home with.\
 It makes heavy use of modern C# features to provide an API that is expressive and comfortable to work with from managed code, while still exposing the full breadth of SDL's functionality.
 
+> [!IMPORTANT]
+> If you look at the [`main`](https://github.com/Sdl3Sharp/Sdl3Sharp/tree/main) branch of SDL3#, you may notice that there hasn't been much activity for a while now and you may ask yourself if the project is still alive.\
+> Please allow me to make it very clear that
+>
+> **SDL3# is very much alive and actively developed!**
+>
+> At the moment, the current development happens primarily on the [`next`](https://github.com/Sdl3Sharp/Sdl3Sharp/tree/next) branch and that's for a very good reason. The long awaited rewrite of the [`Event`](https://github.com/Sdl3Sharp/Sdl3Sharp/blob/next/src/Sdl3Sharp/Events/Event.cs) API, which a majority of other APIs depend upon, has finally been completed!\
+> The reason why that development and further development based on it stays on the `next` branch for now is that the new `Event` API makes heavy use of the upcoming C# 15 feature of union types, and is therefore a **breaking change**.\
+> There is a C# 14 / .NET 10 fallback implemented in the new `Event` API that makes it functionally on par with the old API, but to make the most of the new API, C# 15 and .NET 11 are required.
+>
+> That's why, as long as .NET 11 is still in preview, all development will happen on the `next` branch.\
+> Once .NET 11 is officially released, the `next` branch will be merged into `main`, and that will be become the new official SDL3#!
+
 > [!WARNING]
 > This project is a work in progress and is not yet complete or usable in production. The public .NET API is subject to change at any time and in any form without prior notice. Use at your own risk.
 
