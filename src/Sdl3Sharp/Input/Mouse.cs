@@ -376,6 +376,20 @@ public readonly partial struct Mouse :
 	public static Mouse SimulatedByTouch { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(uint.MaxValue /* ((uint)-1) */ ); }
 
 	/// <summary>
+	/// Gets the <see cref="Mouse"/> instance that used for mouse events that are simulated by pen input
+	/// </summary>
+	/// <value>
+	/// The <see cref="Mouse"/> instance that used for mouse events that are simulated by pen input
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// You can use the value of property to compare against <see cref="MouseButtonEvent.Mouse"/> or <see cref="MouseMotionEvent.Mouse"/>
+	/// to determine whether the mouse event was simulated by pen input.
+	/// </para>
+	/// </remarks>
+	public static Mouse SimulatedByPen { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(uint.MaxValue - 1 /* ((uint)-2) */ ); }
+
+	/// <summary>
 	/// Gets the synchronous mouse button state and the window-relative cursor position
 	/// </summary>
 	/// <value>

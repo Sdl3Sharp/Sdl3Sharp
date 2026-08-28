@@ -129,7 +129,17 @@ public partial struct PenProximityEvent : IFormattable, ISpanFormattable
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
 
-	// TODO: Add a `Pen` property once the `Pen` type is implemented
+	/// <summary>
+	/// Gets or sets the <see cref="Input.Pen"/> associated with this event
+	/// </summary>
+	/// <value>
+	/// The <see cref="Input.Pen"/> associated with this event
+	/// </value>
+	public Pen Pen
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new(mWhich);
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
+	}
 
 #if SDL3_4_16_OR_GREATER
 

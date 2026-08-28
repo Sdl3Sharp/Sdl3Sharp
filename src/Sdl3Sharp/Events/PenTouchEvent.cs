@@ -123,7 +123,17 @@ public partial struct PenTouchEvent : IFormattable, ISpanFormattable
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
 
-	// TODO: Add a `Pen` property once the `Pen` type is implemented
+	/// <summary>
+	/// Gets or sets the <see cref="Input.Pen"/> associated with this event
+	/// </summary>
+	/// <value>
+	/// The <see cref="Input.Pen"/> associated with this event
+	/// </value>
+	public Pen Pen
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new(mWhich);
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
+	}
 
 	/// <summary>
 	/// Gets or sets the state of the <see cref="Pen"/> at the time of this event

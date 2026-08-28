@@ -220,10 +220,24 @@ public readonly partial struct TouchDevice :
 	/// <remarks>
 	/// <para>
 	/// You can use the value of property to compare against <see cref="TouchFingerEvent.TouchDevice"/>
-	/// to determine whether the mouse event was simulated by touch input.
+	/// to determine whether the touch event was simulated by mouse input.
 	/// </para>
 	/// </remarks>
 	public static TouchDevice SimulatedByMouse { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(ulong.MaxValue /* ((ulong)-1L) */); }
+
+	/// <summary>
+	/// Gets the <see cref="TouchDevice"/> instance that used for touch events that are simulated by pen input
+	/// </summary>
+	/// <value>
+	/// The <see cref="TouchDevice"/> instance that used for touch events that are simulated by pen input
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// You can use the value of property to compare against <see cref="TouchFingerEvent.TouchDevice"/>
+	/// to determine whether the touch event was simulated by pen input.
+	/// </para>
+	/// </remarks>
+	public static TouchDevice SimulatedByPen { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(ulong.MaxValue - 1 /* ((ulong)-2L) */); }
 
 	/// <summary>
 	/// Gets the type of this touch device
