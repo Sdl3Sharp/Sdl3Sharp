@@ -18,6 +18,7 @@ partial struct Pen
 	/// Many platforms do not supply this information, so an app must always be prepared to get an <see href="https://wiki.libsdl.org/SDL3/SDL_PEN_DEVICE_TYPE_UNKNOWN">SDL_PEN_DEVICE_TYPE_UNKNOWN</see> result.
 	/// </para>
 	/// </remarks>
+	/// <seealso href="https://wiki.libsdl.org/SDL3/SDL_GetPenDeviceType">SDL_GetPenDeviceType</seealso>
 	[NativeImportFunction<Library>(CallConvs = [typeof(CallConvCdecl)])]	
 	internal static partial PenDeviceType SDL_GetPenDeviceType(uint instance_id);
 
