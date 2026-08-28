@@ -124,23 +124,12 @@ public partial struct KeyboardEvent : IFormattable, ISpanFormattable
 	/// Gets or sets the <see cref="Input.Keyboard"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The <see cref="Input.Keyboard"/> associated with this event, or <c><see langword="null"/></c> if the keyboard is unknown or virtual
+	/// The <see cref="Input.Keyboard"/> associated with this event, or <see cref="Keyboard.Invalid"/> if the keyboard is unknown or virtual
 	/// </value>
-	public Keyboard? Keyboard
+	public Keyboard Keyboard
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		readonly get
-		{
-			if (Input.Keyboard.TryGetFromId(mWhich, out var keyboard))
-			{
-				return keyboard;
-			}
-
-			return null;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		set => mWhich = value?.Id ?? 0;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new(mWhich);
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
 	}
 
 	/// <summary>

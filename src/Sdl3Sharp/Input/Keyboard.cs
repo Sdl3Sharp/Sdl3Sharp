@@ -137,6 +137,14 @@ public readonly partial struct Keyboard :
 	public readonly uint Id { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId; }
 
 	/// <summary>
+	/// Gets the invalid <see cref="Keyboard"/> with an <see cref="Id"/> of <c>0</c>
+	/// </summary>
+	/// <value>
+	/// The invalid <see cref="Keyboard"/> with an <see cref="Id"/> of <c>0</c>, i.e., <see cref="IsValid"/> will be <c><see langword="false"/></c> for this keyboard
+	/// </value>
+	public static Keyboard Invalid { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(0); }
+
+	/// <summary>
 	/// Gets a value indicating whether at least one keyboard is currently connected to the system
 	/// </summary>
 	/// <value>
@@ -161,6 +169,14 @@ public readonly partial struct Keyboard :
 	/// </para>
 	/// </remarks>
 	public static bool IsScreenKeyboardSupported => SDL_HasScreenKeyboardSupport();
+
+	/// <summary>
+	/// Gets a value indicating whether this keyboard is valid
+	/// </summary>
+	/// <value>
+	/// A value indicating whether this keyboard is valid, i.e., its <see cref="Id"/> is not <c>0</c>
+	/// </value>
+	public readonly bool IsValid { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId is not 0; }
 
 	/// <summary>
 	/// Gets the name of this keyboard
@@ -242,6 +258,14 @@ public readonly partial struct Keyboard :
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public readonly bool Equals(Keyboard other) => mId == other.mId;
 
+	/// <summary>
+	/// Gets a <see cref="Keyboard"/> by its numeric ID
+	/// </summary>
+	/// <param name="id">The numeric ID of the keyboard, or <c>0</c> to return <see cref="Invalid"/></param>
+	/// <returns>The <see cref="Keyboard"/> with the specified <paramref name="id"/>, or <see cref="Invalid"/> if <paramref name="id"/> was <c>0</c></returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	public static Keyboard FromId(uint id) => new(id);
+
 	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public readonly override int GetHashCode() => mId.GetHashCode();
@@ -270,8 +294,10 @@ public readonly partial struct Keyboard :
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-		=> $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
-			nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}";
+		=> mId is not 0
+			? $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
+				nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}"
+			: $"Invalid {nameof(Keyboard)}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -279,6 +305,11 @@ public readonly partial struct Keyboard :
 		unsafe
 		{
 			charsWritten = 0;
+
+			if (mId is 0)
+			{
+				return SpanFormat.TryWrite($"Invalid {nameof(Keyboard)}", ref destination, ref charsWritten);
+			}
 
 			if ( !(SpanFormat.TryWrite($"{{ {nameof(Id)}: ", ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite(mId, ref destination, ref charsWritten, format, provider)
@@ -308,25 +339,6 @@ public readonly partial struct Keyboard :
 
 			return SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 		}
-	}
-
-	/// <summary>
-	/// Tries to get a <see cref="Keyboard"/> by its numeric ID
-	/// </summary>
-	/// <param name="id">The numeric ID of the keyboard</param>
-	/// <param name="keyboard">The <see cref="Keyboard"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="Keyboard"/>)</c></param>
-	/// <returns><c><see langword="true"/></c>, if the <paramref name="id"/> represents a valid <see cref="Keyboard"/>; otherwise, <c><see langword="false"/></c></returns>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static bool TryGetFromId(uint id, out Keyboard keyboard)
-	{
-		if (id is 0)
-		{
-			keyboard = default;
-			return false;
-		}
-
-		keyboard = new(id);
-		return true;
 	}
 
 	/// <inheritdoc/>

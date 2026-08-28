@@ -76,25 +76,15 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 	}
 
 	/// <summary>
-	/// Gets or sets the <see cref="Input.TouchDevice"/> associated with this event, if any
+	/// Gets or sets the <see cref="Input.TouchDevice"/> associated with this event
 	/// </summary>
 	/// <value>
-	/// The <see cref="Input.TouchDevice"/> associated with this event, or <c><see langword="null"/></c> if the touch device is unknown
+	/// The <see cref="Input.TouchDevice"/> associated with this event
 	/// </value>
-	public TouchDevice? TouchDevice
+	public TouchDevice TouchDevice
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		readonly get
-		{
-			if (Input.TouchDevice.TryGetFromId(mTouchId, out var touchDevice))
-			{
-				return touchDevice;
-			}
-
-			return null;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTouchId = value?.Id ?? 0;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new(mTouchId);
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTouchId = value.Id;
 	}
 
 	/// <summary>

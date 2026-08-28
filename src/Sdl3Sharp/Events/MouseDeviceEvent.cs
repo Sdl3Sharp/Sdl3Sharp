@@ -80,13 +80,7 @@ public partial struct MouseDeviceEvent : IFormattable, ISpanFormattable
 	/// </value>
 	public Mouse Mouse
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		readonly get
-		{
-			Mouse.TryGetFromId(mWhich, out var mouse);
-			return mouse;
-		}
-
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new(mWhich);
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
 	}
 

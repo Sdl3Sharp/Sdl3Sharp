@@ -80,13 +80,7 @@ public partial struct KeyboardDeviceEvent : IFormattable, ISpanFormattable
 	/// </value>
 	public Keyboard Keyboard
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		readonly get
-		{
-			Keyboard.TryGetFromId(mWhich, out var keyboard);
-			return keyboard;
-		}
-
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new Keyboard(mWhich);
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
 	}
 

@@ -187,6 +187,14 @@ public readonly partial struct Mouse :
 	public readonly uint Id { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId; }
 
 	/// <summary>
+	/// Gets the invalid <see cref="Mouse"/> with an <see cref="Id"/> of <c>0</c>
+	/// </summary>
+	/// <value>
+	/// The invalid <see cref="Mouse"/> with an <see cref="Id"/> of <c>0</c>, i.e., <see cref="IsValid"/> will be <c><see langword="false"/></c> for this mouse
+	/// </value>
+	public static Mouse Invalid { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(0); }
+
+	/// <summary>
 	/// Gets a value indicating whether at least one mouse is currently connected to the system
 	/// </summary>
 	/// <value>
@@ -198,6 +206,14 @@ public readonly partial struct Mouse :
 	/// </para>
 	/// </remarks>
 	public static bool IsAnyConnected => SDL_HasMouse();
+
+	/// <summary>
+	/// Gets a value indicating whether this mouse is valid
+	/// </summary>
+	/// <value>
+	/// A value indicating whether this mouse is valid, i.e., its <see cref="Id"/> is not <c>0</c>
+	/// </value>
+	public readonly bool IsValid { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId is not 0; }
 
 	/// <summary>
 	/// Gets the name of this mouse
@@ -407,6 +423,14 @@ public readonly partial struct Mouse :
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public readonly bool Equals(Mouse other) => mId == other.mId;
 
+	/// <summary>
+	/// Gets a <see cref="Mouse"/> by its numeric ID
+	/// </summary>
+	/// <param name="id">The numeric ID of the mouse, or <c>0</c> to return <see cref="Invalid"/></param>
+	/// <returns>The <see cref="Mouse"/> with the specified <paramref name="id"/>, or <see cref="Invalid"/> if <paramref name="id"/> was <c>0</c></returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	public static Mouse FromId(uint id) => new(id);
+
 	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public readonly override int GetHashCode() => mId.GetHashCode();
@@ -422,8 +446,10 @@ public readonly partial struct Mouse :
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-		=> $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
-			nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}";
+		=> mId is not 0
+			? $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
+				nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}"
+			: $"Invalid {nameof(Mouse)}";
 
 	/// <summary>
 	/// Tries to disable mouse capture if it was previously enabled
@@ -485,6 +511,11 @@ public readonly partial struct Mouse :
 		{
 			charsWritten = 0;
 
+			if (mId is 0)
+			{
+				return SpanFormat.TryWrite($"Invalid {nameof(Mouse)}", ref destination, ref charsWritten);
+			}
+
 			if ( !(SpanFormat.TryWrite($"{{ {nameof(Id)}: ", ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite(mId, ref destination, ref charsWritten, format, provider)
 				&& SpanFormat.TryWrite($", {nameof(Name)}: ", ref destination, ref charsWritten)))
@@ -513,25 +544,6 @@ public readonly partial struct Mouse :
 
 			return SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 		}
-	}
-
-	/// <summary>
-	/// Tries to get a <see cref="Mouse"/> by its numeric ID
-	/// </summary>
-	/// <param name="id">The numeric ID of the mouse</param>
-	/// <param name="mouse">The <see cref="Mouse"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="Mouse"/>)</c></param>
-	/// <returns><c><see langword="true"/></c>, if the <paramref name="id"/> represents a valid <see cref="Mouse"/>; otherwise, <c><see langword="false"/></c></returns>
-	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	public static bool TryGetFromId(uint id, out Mouse mouse)
-	{
-		if (id is 0)
-		{
-			mouse = default;
-			return false;
-		}
-
-		mouse = new(id);
-		return true;
 	}
 
 	/// <summary>

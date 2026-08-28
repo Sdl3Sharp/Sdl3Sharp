@@ -176,6 +176,22 @@ public readonly partial struct TouchDevice :
 	public readonly ulong Id { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId; }
 
 	/// <summary>
+	/// Gets the invalid <see cref="TouchDevice"/> with an <see cref="Id"/> of <c>0</c>
+	/// </summary>
+	/// <value>
+	/// The invalid <see cref="TouchDevice"/> with an <see cref="Id"/> of <c>0</c>, i.e., <see cref="IsValid"/> will be <c><see langword="false"/></c> for this touch device
+	/// </value>
+	public static TouchDevice Invalid { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(0); }
+
+	/// <summary>
+	/// Gets a value indicating whether this touch device is valid
+	/// </summary>
+	/// <value>
+	/// A value indicating whether this touch device is valid, i.e., its <see cref="Id"/> is not <c>0</c>
+	/// </value>
+	public readonly bool IsValid { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => mId is not 0; }
+
+	/// <summary>
 	/// Gets the name of this touch device
 	/// </summary>
 	/// <value>
@@ -223,6 +239,14 @@ public readonly partial struct TouchDevice :
 	/// <inheritdoc/>
 	public readonly bool Equals(TouchDevice other) => mId == other.mId;
 
+	/// <summary>
+	/// Gets a <see cref="TouchDevice"/> by its numeric ID
+	/// </summary>
+	/// <param name="id">The numeric ID of the touch device, or <c>0</c> to return <see cref="Invalid"/></param>
+	/// <returns>The <see cref="TouchDevice"/> with the specified <paramref name="id"/>, or <see cref="Invalid"/> if <paramref name="id"/> was <c>0</c></returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	public static TouchDevice FromId(uint id) => new(id);
+
 	/// <inheritdoc/>
 	public readonly override int GetHashCode() => mId.GetHashCode();
 
@@ -237,8 +261,10 @@ public readonly partial struct TouchDevice :
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-		=> $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
-			nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}";
+		=> mId is not 0
+			? $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
+				nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}"
+			: $"Invalid {nameof(TouchDevice)}";
 
 	/// <inheritdoc/>
 	public readonly bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = default)
@@ -246,6 +272,11 @@ public readonly partial struct TouchDevice :
 		unsafe
 		{
 			charsWritten = 0;
+
+			if (mId is 0)
+			{
+				return SpanFormat.TryWrite($"Invalid {nameof(TouchDevice)}", ref destination, ref charsWritten);
+			}
 
 			if (!(SpanFormat.TryWrite($"{{ {nameof(Id)}: ", ref destination, ref charsWritten)
 				&& SpanFormat.TryWrite(mId, ref destination, ref charsWritten, format, provider)
@@ -275,24 +306,6 @@ public readonly partial struct TouchDevice :
 
 			return SpanFormat.TryWrite(" }", ref destination, ref charsWritten);
 		}
-	}
-
-	/// <summary>
-	/// Tries to get a <see cref="TouchDevice"/> by its numeric ID
-	/// </summary>
-	/// <param name="id">The numeric ID of the touch device</param>
-	/// <param name="touchDevice">The <see cref="TouchDevice"/> associated with the specified <paramref name="id"/>, if the method returns <c><see langword="true"/></c>; otherwise, <c><see langword="default"/>(<see cref="TouchDevice"/>)</c></param>
-	/// <returns><c><see langword="true"/></c>, if the <paramref name="id"/> represents a valid <see cref="TouchDevice"/>; otherwise, <c><see langword="false"/></c></returns>
-	public static bool TryGetFromId(ulong id, out TouchDevice touchDevice)
-	{
-		if (id is 0)
-		{
-			touchDevice = default;
-			return false;
-		}
-
-		touchDevice = new(id);
-		return true;
 	}
 
 	/// <inheritdoc/>

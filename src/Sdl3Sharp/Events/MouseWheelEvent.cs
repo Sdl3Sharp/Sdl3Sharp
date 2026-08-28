@@ -123,22 +123,12 @@ public partial struct MouseWheelEvent : IFormattable, ISpanFormattable
 	/// Gets or sets the <see cref="Input.Mouse"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The <see cref="Input.Mouse"/> associated with this event, or <c><see langword="null"/></c> if the mouse is unknown
+	/// The <see cref="Input.Mouse"/> associated with this event, or <see cref="Mouse.Invalid"/> if the mouse is unknown
 	/// </value>
-	public Mouse? Mouse
+	public Mouse Mouse
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-		readonly get
-		{
-			if (Input.Mouse.TryGetFromId(mWhich, out var mouse))
-			{
-				return mouse;
-			}
-
-			return null;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value?.Id ?? 0;
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => new(mWhich);
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value.Id;
 	}
 
 	/// <summary>
