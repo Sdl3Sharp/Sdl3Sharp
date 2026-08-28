@@ -1,4 +1,5 @@
-﻿using Sdl3Sharp.Internal;
+﻿using Sdl3Sharp.Input;
+using Sdl3Sharp.Internal;
 using Sdl3Sharp.Video.Windowing;
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -74,13 +75,33 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTouchId = value;
 	}
 
-	// TODO: Add a `TouchDevice` property once the `TouchDevice` type is implemented
-
 	/// <summary>
-	/// Gets or sets the <see cref="Finger.Id">ID</see> of the <see cref="Input.Finger"/> on the <see cref="Input.TouchDevice"/>
+	/// Gets or sets the <see cref="Input.TouchDevice"/> associated with this event, if any
 	/// </summary>
 	/// <value>
-	/// The <see cref="Finger.Id">ID</see> of the <see cref="Input.Finger"/> on the <see cref="Input.TouchDevice"/>
+	/// The <see cref="Input.TouchDevice"/> associated with this event, or <c><see langword="null"/></c> if the touch device is unknown
+	/// </value>
+	public TouchDevice? TouchDevice
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+		readonly get
+		{
+			if (Input.TouchDevice.TryGetFromId(mTouchId, out var touchDevice))
+			{
+				return touchDevice;
+			}
+
+			return null;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mTouchId = value?.Id ?? 0;
+	}
+
+	/// <summary>
+	/// Gets or sets the <see cref="Finger.Id">ID</see> of the <see cref="Finger"/> on the <see cref="Input.TouchDevice"/>
+	/// </summary>
+	/// <value>
+	/// The <see cref="Finger.Id">ID</see> of the <see cref="Finger"/> on the <see cref="Input.TouchDevice"/>
 	/// </value>
 	public ulong FingerId
 	{
@@ -88,13 +109,11 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mFingerId = value;
 	}
 
-	// TODO: Add a `Finger` property once the `Finger` type is implemented
-
 	/// <summary>
-	/// Gets or sets the horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
+	/// Gets or sets the horizontal position of the finger on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the left edge and <c>1</c> is the right edge
+	/// The horizontal position of the finger on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the left edge and <c>1</c> is the right edge
 	/// </value>
 	/// <remarks>
 	/// <para>
@@ -110,10 +129,10 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 	}
 
 	/// <summary>
-	/// Gets or sets the vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
+	/// Gets or sets the vertical position of the finger on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the top edge and <c>1</c> is the bottom edge
+	/// The vertical position of the finger on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is the top edge and <c>1</c> is the bottom edge
 	/// </value>
 	/// <remarks>
 	/// <para>
@@ -129,10 +148,10 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 	}
 
 	/// <summary>
-	/// Gets or sets the change in horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
+	/// Gets or sets the change in horizontal position of the finger on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The change in horizontal position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the right edge to the left edge, and <c>1</c> is a transversal all the way from the left edge to the right edge
+	/// The change in horizontal position of the finger on the <see cref="TouchDevice"/>, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the right edge to the left edge, and <c>1</c> is a transversal all the way from the left edge to the right edge
 	/// </value>
 	public float DeltaX
 	{
@@ -141,10 +160,10 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 	}
 
 	/// <summary>
-	/// Gets or sets the change in vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>
+	/// Gets or sets the change in vertical position of the finger on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The change in vertical position of the <see cref="Finger"/> on the <see cref="TouchDevice"/>, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the bottom edge to the top edge, and <c>1</c> is a transversal all the way from the top edge to the bottom edge
+	/// The change in vertical position of the finger on the <see cref="TouchDevice"/>, normalized between <c>-1</c> and <c>1</c>, where <c>-1</c> is a tranversal all the way from the bottom edge to the top edge, and <c>1</c> is a transversal all the way from the top edge to the bottom edge
 	/// </value>
 	public float DeltaY
 	{
@@ -153,10 +172,10 @@ public partial struct TouchFingerEvent : IFormattable, ISpanFormattable
 	}
 
 	/// <summary>
-	/// Gets or sets the pressure of the <see cref="Finger"/> applied on the <see cref="TouchDevice"/>
+	/// Gets or sets the pressure of the finger applied on the <see cref="TouchDevice"/>
 	/// </summary>
 	/// <value>
-	/// The pressure of the <see cref="Finger"/> applied on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is no pressure and <c>1</c> is maximum pressure
+	/// The pressure of the finger applied on the <see cref="TouchDevice"/>, normalized between <c>0</c> and <c>1</c>, where <c>0</c> is no pressure and <c>1</c> is maximum pressure
 	/// </value>
 	/// <exception cref="ArgumentOutOfRangeException">
 	/// When setting this property, the given value is less than <c>0</c> or greater than <c>1</c>

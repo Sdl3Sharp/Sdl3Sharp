@@ -20,6 +20,10 @@ namespace Sdl3Sharp.Input;
 /// If a mouse is disconnected and then reconnected, it will be assigned a new <see cref="Id"/>.
 /// </para>
 /// <para>
+/// Since many apps only care about basic mouse input, SDL offers a virtual mouse device for touch and pen input, which often can make a desktop application work on a touchscreen phone without any code changes.
+/// Apps that care about touch/pen separately from mouse input should filter out events with a <see cref="TouchFingerEvent.TouchDevice"/> equal to <see cref="TouchDevice.SimulatedByMouse"/>.
+/// </para>
+/// <para>
 /// For the most part, <see cref="Mouse"/> is not thread-safe, and most of its properties and methods should only be accessed from the main thread.
 /// </para>
 /// </remarks>
@@ -342,6 +346,20 @@ public readonly partial struct Mouse :
 	}
 
 	/// <summary>
+	/// Gets the <see cref="Mouse"/> instance that used for mouse events that are simulated by touch input
+	/// </summary>
+	/// <value>
+	/// The <see cref="Mouse"/> instance that used for mouse events that are simulated by touch input
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// You can use the value of property to compare against <see cref="MouseButtonEvent.Mouse"/> or <see cref="MouseMotionEvent.Mouse"/>
+	/// to determine whether the mouse event was simulated by touch input.
+	/// </para>
+	/// </remarks>
+	public static Mouse SimulatedByTouch { [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] get => new(uint.MaxValue /* ((uint)-1) */ ); }
+
+	/// <summary>
 	/// Gets the synchronous mouse button state and the window-relative cursor position
 	/// </summary>
 	/// <value>
@@ -404,7 +422,8 @@ public readonly partial struct Mouse :
 
 	/// <inheritdoc/>
 	public readonly string ToString(string? format, IFormatProvider? formatProvider)
-		=> $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}";
+		=> $"{{ {nameof(Id)}: {mId.ToString(format, formatProvider)}, {
+			nameof(Name)}: {Name switch { not null and var name => $"\"{name}\"", _ => "null" }} }}";
 
 	/// <summary>
 	/// Tries to disable mouse capture if it was previously enabled
