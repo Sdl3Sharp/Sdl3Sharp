@@ -31,23 +31,6 @@ It makes heavy use of modern C# features to provide an API that is expressive an
 > [!WARNING]
 > This project is a work in progress and is not yet complete or usable in production. The public .NET API is subject to change at any time and in any form without prior notice. Use at your own risk.
 
-## Donating
-
-At the moment, I'm the sole maintainer and contributor to this project, and all of it I do in my free time.
-
-If you like this project and like what I'm doing, please consider supporting it by donating. It would help me dedicate more time into developing and improving SDL3#.
-
-Any donation, one-time or recurring, in any amount, is deeply appreciated!\
-Thank you so much for your help and support. ❤️
-
-You can donate via PayPal using the button below:
-
-[![Donate with PayPal button](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate/?hosted_button_id=UKHU838H8M2H2)
-
-Or you can just scan the QR code below:
-
-![Donate with PayPal](paypal_donations_qr.png)
-
 ## Documentation
 
 At the moment, there's a very crude API documentation available under <https://sdl3sharp.github.io/Sdl3Sharp/api/Sdl3Sharp.html>.
