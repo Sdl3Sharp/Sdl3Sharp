@@ -5,7 +5,6 @@
     <Project Path="Sdl3Sharp/Sdl3Sharp.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="../tests/Sdl3Sharp.SourceGeneration.RegisterDriver.Tests/Sdl3Sharp.SourceGeneration.RegisterDriver.Tests.csproj" Id="bcf8f417-39ac-47a1-81a6-1722ba6668ea" />
     <Project Path="../tests/Sdl3Sharp.Tests/Sdl3Sharp.Tests.csproj" Id="4621f3a7-b4c5-4c67-8796-86f7eeacaa16" />
   </Folder>
 </Solution>
