@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="Sdl3Sharp.SourceGeneration.IdType/Sdl3Sharp.SourceGeneration.IdType.csproj" Id="77d89a85-90fa-4169-91d0-36ffe3f495a3" />
     <Project Path="Sdl3Sharp.SourceGeneration.RegisterDriver/Sdl3Sharp.SourceGeneration.RegisterDriver.csproj" />
     <Project Path="Sdl3Sharp.SourceGeneration/Sdl3Sharp.SourceGeneration.csproj" />
     <Project Path="Sdl3Sharp/Sdl3Sharp.csproj" />

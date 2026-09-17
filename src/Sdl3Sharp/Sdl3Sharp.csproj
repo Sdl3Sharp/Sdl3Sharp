@@ -29,6 +29,7 @@
   
   <ItemGroup>
     <ProjectReference Include="..\Sdl3Sharp.SourceGeneration\Sdl3Sharp.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    <ProjectReference Include="..\Sdl3Sharp.SourceGeneration.IdType\Sdl3Sharp.SourceGeneration.IdType.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
     <ProjectReference Include="..\Sdl3Sharp.SourceGeneration.RegisterDriver\Sdl3Sharp.SourceGeneration.RegisterDriver.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
     <PackageReference Include="Sdl3Sharp.Ffi.Core" Version="$(Sdl3SharpFfiVersion)" />
   </ItemGroup>
