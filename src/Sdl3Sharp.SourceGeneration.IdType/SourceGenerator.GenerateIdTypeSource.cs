@@ -28,11 +28,11 @@ partial class SourceGenerator
 		isEnabledByDefault: true
 	);
 
-	private static readonly DiagnosticDescriptor mMissingValueConstructorForValueConversionDescriptor = new(
+	private static readonly DiagnosticDescriptor mMissingValueConstructorDescriptor = new(
 		id: $"{DiagnosticDescriptorIdPrefix}0111",
 		title: "Missing value constructor",
 		messageFormat: 
-			"The target type '{0}' must have a constructor that takes a single argument of type '{1}' in order to generate the value conversion operators." +
+			"The target type '{0}' must have a constructor that takes a single argument of type '{1}'{2}." +
 			$" '{GenerateValueConstructor}' was false and the target type does not have a compatible constructor defined on its own.",
 		category: DiagnosticDescriptorCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
@@ -75,6 +75,7 @@ partial class SourceGenerator
 		bool generateValueProperty,
 		bool generateValueConversionOperators,
 		bool generateIsValidProperty,
+		bool generateInvalidProperty,
 		bool generateIEquatableImplementation,
 		bool generateIEqualityOperatorsImplementation,
 		bool generateIFormattableImplementation,
@@ -126,8 +127,10 @@ partial class SourceGenerator
 		var fullyQualifiedUnderlyingTypeName = underlyingType.ToDisplayString(mFullyQualifiedUnderlyingTypeDisplayFormat);
 		var fullyQualifiedEntityTypeNameCRef = $"{entityType.ToDisplayString(mFullyQualifiedEntityTypeDisplayFormat)}{(entityType is INamedTypeSymbol { TypeParameters: { Length: > 0 } typeParams } ? $"{{{string.Join(", ", typeParams.Select(tp => tp.Name))}}}" : "")}";
 
-		var underlyingTypeIsPrimitiveNumerical = underlyingType.SpecialType
-			is SpecialType.System_SByte
+		var underlyingTypeIsPrimitive = underlyingType.SpecialType
+			is SpecialType.System_Boolean
+			or SpecialType.System_Char
+			or SpecialType.System_SByte
 			or SpecialType.System_Byte
 			or SpecialType.System_Int16
 			or SpecialType.System_UInt16
@@ -135,11 +138,11 @@ partial class SourceGenerator
 			or SpecialType.System_UInt32
 			or SpecialType.System_Int64
 			or SpecialType.System_UInt64
-			or SpecialType.System_IntPtr
-			or SpecialType.System_UIntPtr
+			or SpecialType.System_Decimal
 			or SpecialType.System_Single
 			or SpecialType.System_Double
-			or SpecialType.System_Decimal;
+			or SpecialType.System_IntPtr
+			or SpecialType.System_UIntPtr;
 
 		builder.Clear();
 
@@ -305,6 +308,123 @@ partial class SourceGenerator
 			}
 		}
 
+		if (generateInvalidProperty)
+		{
+			if (!targetType.MemberNames.Contains("Invalid")) // We don't generate the `Invalid` property if the target type already has such a member defined (we assume the user has explicitly defined their own implementation).
+			{
+				if (!generateValueConstructor
+					&& !targetType.InstanceConstructors.Any(ctor => ctor is { Parameters: [{ Type: var argType }] } && argType.Equals(underlyingType, SymbolEqualityComparer.Default)))
+				{
+					// The property's implementation relies on the existence of the value constructor. If there's none, we can't generate the property.
+					// We just discard what we've done so far, report a diagnostic, and proceed to the next target type, if any.
+
+					spc.ReportDiagnostic(Diagnostic.Create(
+						descriptor: mMissingValueConstructorDescriptor,
+						location: location,
+						targetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+						underlyingType.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
+						" in order to generate the 'Invalid' property"
+					));
+
+					return;
+				}
+
+				builder.Append($$"""
+
+						/// <summary>
+						/// Gets the invalid <see cref="{{typeNameCRef}}"/>
+						/// </summary>
+						/// <value>
+						/// The invalid <see cref="{{typeNameCRef}}"/>, i.e., the <see cref="{{typeNameCRef}}"/> that is <em>not</em> valid for identifying a <see cref="{{fullyQualifiedEntityTypeNameCRef}}"/>
+						/// </value>
+					""");
+
+				if (generateIsValidProperty || targetType.MemberNames.Contains("IsValid"))
+				{
+					builder.Append($$"""
+
+							/// <remarks>
+							/// <para>
+							/// The value of the <see cref="IsValid"/> property of the <see cref="{{typeNameCRef}}"/> returned by this property will be <c><see langword="false"/></c>.
+							/// </para>
+							/// </remarks>
+						""");
+				}
+
+				builder.Append($$"""
+
+						public static {{simpleTypeName}} Invalid
+						{
+							[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining | global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+							get
+					""");
+
+				if (invalidValue is null)
+				{
+					// We don't have to check whether the underlying type implements `INumberBase<T>` for it's own type here, because the attribute's generic type parameter's constraint already ensures that.
+
+					if (underlyingTypeIsPrimitive)
+					{
+						// If the underlying type is a primitive type, we can just return the `default(<underlying type>)` literal (`0` for numerical type, `false` for `bool`, `'\0'` for `char`, etc.).
+
+						builder.Append($$"""
+							 => new(default({{fullyQualifiedUnderlyingTypeName}}));
+
+							""");
+					}
+					else if (iNumberBaseType is not null
+						&& iNumberBaseType
+							.Construct(underlyingType)
+							.GetMembers("Zero")
+							.OfType<IPropertySymbol>()
+							.FirstOrDefault(property => property.Type.Equals(underlyingType, SymbolEqualityComparer.Default))
+							is { } zeroProperty // We need to extract the `Zero` property dynamically per the underlying type here, because it depends on the actual underlying type (`INumberBase<T>` is obviously generic).
+						&& underlyingType.FindImplementationForInterfaceMember(zeroProperty) is IPropertySymbol { ExplicitInterfaceImplementations.IsDefaultOrEmpty: true })
+					{
+						// The underlying type implements `INumberBase<T>.Zero` non-explicitly, so we can safely return it directly by name.
+
+						builder.Append($$"""
+							 => new({{fullyQualifiedUnderlyingTypeName}}.Zero);
+
+							""");
+					}
+					else
+					{
+						// The underlying type implements the `INumberBase<T>.Zero` property explicitly. Thus we can't just access it by name directly.
+						// See the comments for the `IsValid` property below for an explanation of what's going on here.
+
+						builder.Append($$"""
+
+									{
+										[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining | global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+										static T getZero<T>()
+											where T : notnull, global::System.Numerics.INumberBase<T>
+											=> T.Zero;
+
+										return new(getZero<{{fullyQualifiedUnderlyingTypeName}}>());
+									}
+
+							""");
+					}
+				}
+				else
+				{
+					// We can safely use `SymbolDisplay.FormatPrimitive` here because we not only know that `invalidValue` is a primitive value, but it's also constant (because it was specified in an attribute application).
+
+					builder.Append($$"""
+
+								=> new({{SymbolDisplay.FormatPrimitive(invalidValue, quoteStrings: true, useHexadecimalNumbers: false)}});
+
+						""");
+				}
+
+				builder.Append("""
+						}
+
+					""");
+			}
+		}
+
 		if (generateIsValidProperty)
 		{
 			if (!targetType.MemberNames.Contains("IsValid")) // We don't generate the `IsValid` property if the target type already has such a member defined (we assume the user has explicitly defined their own implementation).
@@ -327,30 +447,12 @@ partial class SourceGenerator
 				{
 					// We don't have to check whether the underlying type implements `INumberBase<T>` for it's own type here, because the attribute's generic type parameter's constraint already ensures that.
 
-					if (underlyingTypeIsPrimitiveNumerical)
+					if (underlyingTypeIsPrimitive)
 					{
-						// If the underlying type is a primitive numerical type, we can just compare against the `0` literal.
+						// If the underlying type is a primitive type, we can just compare against the `default(<underlying type>)` literal (`0` for numerical type, `false` for `bool`, `'\0'` for `char`, etc.).
 
 						builder.Append($$"""
-							 => {{privateValueFieldName}} is not 0;
-
-							""");
-					}
-					else if (underlyingType.SpecialType is SpecialType.System_Boolean)
-					{
-						// If the underlying type is `bool`, we literally can just return the value of the underlying field.
-
-						builder.Append($$"""
-							 => {{privateValueFieldName}};
-
-							""");
-					}
-					else if (underlyingType.SpecialType is SpecialType.System_Char)
-					{
-						// If the underlying type is `char`, we can just compare against the `'\0'` literal (sadly, despite `char` acting like a numerical type most of the time, we can't compare it against the `0` literal).
-
-						builder.Append($$"""
-							 => {{privateValueFieldName}} is not '\0';
+							 => {{privateValueFieldName}} is not default({{fullyQualifiedUnderlyingTypeName}});
 
 							""");
 					}
@@ -764,7 +866,7 @@ partial class SourceGenerator
 
 			// The underlying might not explicitly implement `IEqualityOperators<TSelf, TOther, bool>` because it has language built-in equality operators defined for it,
 			// in which case we can use those instead of the interface's `==` and `!=` operators.
-			var constructedIEqualityOperatorsType = !underlyingTypeIsPrimitiveNumerical
+			var constructedIEqualityOperatorsType = !underlyingTypeIsPrimitive
 				? iEqualityOperatorsType?.Construct(underlyingType, underlyingType, compilation.GetSpecialType(SpecialType.System_Boolean))
 				: null;
 
@@ -783,7 +885,7 @@ partial class SourceGenerator
 						public static bool operator ==({{targetType.Name}} left, {{targetType.Name}} right)
 					""");
 
-				if (underlyingTypeIsPrimitiveNumerical
+				if (underlyingTypeIsPrimitive
 					|| (constructedIEqualityOperatorsType is not null
 						&& constructedIEqualityOperatorsType
 							.GetMembers(WellKnownMemberNames.EqualityOperatorName)
@@ -836,7 +938,7 @@ partial class SourceGenerator
 						public static bool operator !=({{targetType.Name}} left, {{targetType.Name}} right)
 					""");
 
-				if ((underlyingTypeIsPrimitiveNumerical || underlyingType.SpecialType is SpecialType.System_Boolean or SpecialType.System_Char)
+				if (underlyingTypeIsPrimitive
 					|| (constructedIEqualityOperatorsType is not null
 						&& constructedIEqualityOperatorsType
 							.GetMembers(WellKnownMemberNames.InequalityOperatorName)
@@ -890,10 +992,15 @@ partial class SourceGenerator
 				if (!generateValueConstructor
 					&& !targetType.InstanceConstructors.Any(ctor => ctor is { Parameters: [{ Type: var argType }] } && argType.Equals(underlyingType, SymbolEqualityComparer.Default)))
 				{
+					// The operator's implementation relies on the existence of the value constructor. If there's none, we can't generate the operator.
+					// We just discard what we've done so far, report a diagnostic, and proceed to the next target type, if any.
+
 					spc.ReportDiagnostic(Diagnostic.Create(
-						descriptor: mMissingValueConstructorForValueConversionDescriptor,
+						descriptor: mMissingValueConstructorDescriptor,
 						location: location,
-						targetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), underlyingType.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat)
+						targetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+						underlyingType.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
+						" in order to generate the value conversion operators"
 					));
 
 					return;
@@ -907,7 +1014,7 @@ partial class SourceGenerator
 						/// <param name="value">The numerical ID value to convert</param>
 						/// <returns>A <see cref="{{typeNameCRef}}"/> instance with the specified numerical ID value</returns>
 						[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining | global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-						public static explicit operator {{targetType.Name}}({{fullyQualifiedUnderlyingTypeName}} value) => new {{targetType.Name}}(value);
+						public static explicit operator {{targetType.Name}}({{fullyQualifiedUnderlyingTypeName}} value) => new(value);
 
 					""");
 			}

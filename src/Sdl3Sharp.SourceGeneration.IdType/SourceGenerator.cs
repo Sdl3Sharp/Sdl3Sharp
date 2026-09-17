@@ -68,6 +68,11 @@ internal sealed partial class SourceGenerator : IIncrementalGenerator
 								{ Key: GenerateIsValidProperty, Value: { Kind: TypedConstantKind.Primitive, Value: bool generateIsValidProperty } } => generateIsValidProperty,
 								_ => true // defaults to true (see attribute definition)
 							},
+							generateInvalidProperty: namedArguments.FirstOrDefault(static p => p.Key is GenerateInvalidProperty) switch
+							{
+								{ Key: GenerateInvalidProperty, Value: { Kind: TypedConstantKind.Primitive, Value: bool generateInvalidProperty } } => generateInvalidProperty,
+								_ => true // defaults to true (see attribute definition)
+							},
 							generateIEquatableImplementation: namedArguments.FirstOrDefault(static p => p.Key is GenerateIEquatableImplementation) switch
 							{
 								{ Key: GenerateIEquatableImplementation, Value: { Kind: TypedConstantKind.Primitive, Value: bool generateIEquatableImplementation } } => generateIEquatableImplementation,

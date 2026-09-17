@@ -18,6 +18,7 @@ partial class Constants
 	public const string GenerateValueProperty = nameof(GenerateValueProperty);
 	public const string GenerateValueConversionOperators = nameof(GenerateValueConversionOperators);
 	public const string GenerateIsValidProperty = nameof(GenerateIsValidProperty);
+	public const string GenerateInvalidProperty = nameof(GenerateInvalidProperty);
 	public const string GenerateIEquatableImplementation = nameof(GenerateIEquatableImplementation);
 	public const string GenerateIEqualityOperatorsImplementation = nameof(GenerateIEqualityOperatorsImplementation);
 	public const string GenerateIFormattableImplementation = nameof(GenerateIFormattableImplementation);
@@ -56,6 +57,8 @@ partial class SourceGenerator
 					public bool {{GenerateValueConversionOperators}} { get; init; } = true;
 
 					public bool {{GenerateIsValidProperty}} { get; init; } = true;
+
+					public bool {{GenerateInvalidProperty}} { get; init; } = true;
 
 					public bool {{GenerateIEquatableImplementation}} { get; init; } = true;
 
