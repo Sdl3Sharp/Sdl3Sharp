@@ -10,6 +10,11 @@
     <Version>0.1.0</Version>
   </PropertyGroup>
 
+  <!-- Maybe guard this with a condition to only be included in test builds? -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sdl3Sharp.SourceGeneration.RegisterDriver.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="5.3.0">
       <PrivateAssets>all</PrivateAssets>
