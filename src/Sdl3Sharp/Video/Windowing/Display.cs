@@ -144,13 +144,17 @@ public abstract partial class Display : IFormattable, ISpanFormattable
 				Unsafe.SkipInit(out int count);
 
 				var displays = SDL_GetDisplays(&count);
+
+				if (displays is null)
+				{
+					[DoesNotReturn]
+					static void failCouldNotGetDisplays() => throw new SdlException("Couldn't get the displays connected to the system");
+
+					failCouldNotGetDisplays();
+				}
+
 				try
 				{
-					if (displays is null)
-					{
-						failCouldNotGetDisplays();
-					}
-
 					if (count is not > 0)
 					{
 						return [];
@@ -172,9 +176,6 @@ public abstract partial class Display : IFormattable, ISpanFormattable
 					Utilities.NativeMemory.SDL_free(displays);
 				}
 			}
-
-			[DoesNotReturn]
-			static void failCouldNotGetDisplays() => throw new SdlException("Couldn't get the displays connected to the system");
 		}
 	}
 

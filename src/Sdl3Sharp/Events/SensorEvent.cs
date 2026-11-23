@@ -73,8 +73,6 @@ public partial struct SensorEvent : IFormattable, ISpanFormattable
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mWhich = value;
 	}
 
-	// TODO: Add a `Sensor` property once the `Sensor` type is implemented
-
 	/// <summary>
 	/// Gets or sets the data from the sensor
 	/// </summary>
@@ -83,7 +81,8 @@ public partial struct SensorEvent : IFormattable, ISpanFormattable
 	/// </value>
 	/// <remarks>
 	/// <para>
-	/// If you need more data from the sensor (i.e., the sensor provides more then six <c><see cref="float"/></c> values), you can use then <see cref="SDL_GetSensorData"/> method to get the data from the <see cref="Sensor"/>.
+	/// If you need more data from the sensor (i.e., the sensor provides more than six <c><see cref="float"/></c> values),
+	/// you can use the <see cref="Sensor.TryGetData(Span{float})"/> method to get the data from the <see cref="TryOpenSensor(out Sensor?)">opened sensor</see>.
 	/// </para>
 	/// </remarks>
 	public SensorData Data
@@ -108,6 +107,22 @@ public partial struct SensorEvent : IFormattable, ISpanFormattable
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] readonly get => mSensorTimestamp;
 		[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)] set => mSensorTimestamp = value;
 	}
+
+	/// <summary>
+	/// Tries to open the <see cref="Input.Sensor"/> associated with this event
+	/// </summary>
+	/// <param name="sensor">The opened sensor, or <c><see langword="null"/></c> if the sensor could not be opened</param>
+	/// <returns><c><see langword="true"/></c> if the sensor was successfully opened; otherwise, <c><see langword="false"/></c> (check <see cref="Error.TryGet(out string?)"/> for more information)</returns>
+	/// <remarks>
+	/// <para>
+	/// It is safe to open the same sensor multiple times, even if it was already opened by another component.
+	/// </para>
+	/// <para>
+	/// Note that you should <em>always</em> <see cref="Sensor.Dispose()">dispose and close</see> a sensor you opened yourself when you don't need it anymore.
+	/// You don't need to worry about other components that might have opened the same sensor, as the sensor is reference counted and will only be finally closed and released once all references to it have been disposed.
+	/// </para>
+	/// </remarks>
+	public readonly bool TryOpenSensor([NotNullWhen(true)] out Sensor? sensor) => Sensor.TryOpenFromId(SensorId, out sensor);
 
 	/// <inheritdoc/>
 	public readonly override string ToString() => ToString(format: default, formatProvider: default);

@@ -14,15 +14,15 @@
 /// This measurement includes the force of gravity, so a device at rest will have an value of <see cref="Sensor.StandardGravity"/> away from the center of the earth, which is a positive Y value.
 /// <list type="bullet">
 ///		<item>
-///			<term><c>values[0]</c></term>
+///			<term><c>data[0]</c></term>
 ///			<description>Acceleration on the X axis</description>
 ///		</item>
 ///		<item>
-///			<term><c>values[1]</c></term>
+///			<term><c>data[1]</c></term>
 ///			<description>Acceleration on the Y axis</description>
 ///		</item>
 ///		<item>
-///			<term><c>values[2]</c></term>
+///			<term><c>data[2]</c></term>
 ///			<description>Acceleration on the Z axis</description>
 ///		</item>
 /// </list>
@@ -49,15 +49,15 @@
 /// That is, an observer looking from a positive location on one of the axes would see positive rotation on that axis when it appeared to be rotating counter-clockwise.
 /// <list type="bullet">
 ///		<item>
-///			<term><c>values[0]</c></term>
+///			<term><c>data[0]</c></term>
 ///			<description>Angular speed around the X axis (<em>pitch</em>)</description>
 ///		</item>
 ///		<item>
-///			<term><c>values[1]</c></term>
+///			<term><c>data[1]</c></term>
 ///			<description>Angular speed around the Y axis (<em>yaw</em>)</description>
 ///		</item>
 ///		<item>
-///			<term><c>values[2]</c></term>
+///			<term><c>data[2]</c></term>
 ///			<description>Angular speed around the Z axis (<em>roll</em>)</description>
 ///		</item>
 /// </list>
