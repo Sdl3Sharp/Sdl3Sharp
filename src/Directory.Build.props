@@ -4,7 +4,7 @@
 
         <PackageId>Sdl3Sharp</PackageId>
         <VersionPrefix>0.0.2</VersionPrefix>
-        <VersionSuffix>alpha.4</VersionSuffix>
+        <VersionSuffix>alpha.5</VersionSuffix>
         <Description>SDL3# - SDL bindings for C#/.NET</Description>
         <Authors>Felix Rüdiger</Authors>
 
@@ -15,7 +15,7 @@
 
         <!-- -->
 
-        <Sdl3SharpFfiVersion>0.5.1-alpha.1</Sdl3SharpFfiVersion>
+        <Sdl3SharpFfiVersion>0.5.1-alpha.2</Sdl3SharpFfiVersion>
     </PropertyGroup>
 
     <ItemGroup>
