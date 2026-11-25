@@ -2,7 +2,6 @@ name: Build, Pack, Push, and Release
 
 on:
   workflow_dispatch:
-  push: # this is just here to make the workflow visible from a different branch than main, can be removed once the commit was pushed to upstream
 
 permissions:
   contents: write
