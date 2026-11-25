@@ -1,0 +1,262 @@
+name: Build, Pack, Push, and Release
+
+on:
+  workflow_dispatch:
+  push: # this is just here to make the workflow visible from a different branch than main, can be removed once the commit was pushed to upstream
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: nuget-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  build-pack-push-release:
+    runs-on: ubuntu-latest
+
+    env:
+      PACKAGE_OUTPUT_DIR: ./build
+      CORE_PACKAGE_ID: Sdl3Sharp.Core
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: latest
+
+      - name: Make sure make.cs wrapper is executable
+        run: chmod +x ./make.sh
+
+      - name: Build
+        run: ./make.sh build --configuration Release
+
+      - name: Pack
+        run: ./make.sh pack --configuration Release --strict
+
+      - name: Verify package output
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          nupkgs=( "$PACKAGE_OUTPUT_DIR"/*.nupkg )
+          core_nupkgs=( "$PACKAGE_OUTPUT_DIR/$CORE_PACKAGE_ID".*.nupkg )
+
+          if [ "${#nupkgs[@]}" -eq 0 ]; then
+            echo "No .nupkg files were produced in '$PACKAGE_OUTPUT_DIR'."
+            exit 1
+          fi
+
+          if [ "${#core_nupkgs[@]}" -ne 1 ]; then
+            echo "Expected exactly one '$CORE_PACKAGE_ID' package, found ${#core_nupkgs[@]}."
+            printf 'Produced packages:\n'
+            printf '  %s\n' "${nupkgs[@]}"
+            exit 1
+          fi
+
+          echo "CORE_PACKAGE_PATH=${core_nupkgs[0]}" >> "$GITHUB_ENV"
+
+      - name: Create package metadata extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > "$RUNNER_TEMP/get-package-version.cs" <<'CSHARP'
+          #:package NuGet.Packaging@8.0.0
+          #:package System.Security.Cryptography.Pkcs@11.0.0
+
+          try
+          {
+              if (args is not [var packagePath, var gitHubOutputPath, ..])
+              {
+                  throw new ArgumentException("Expected two arguments: the package path and GITHUB_OUTPUT path.");
+              }
+
+              await using var package = File.OpenRead(packagePath);
+              using var reader = new NuGet.Packaging.PackageArchiveReader(package);
+
+              if (await reader.GetIdentityAsync(cancellationToken: default) is not
+                  { Id: not null and var id, HasVersion: true, Version: not null and var version })
+              {
+                  throw new InvalidOperationException("Failed to retrieve the package identity or version.");
+              }
+
+              await File.AppendAllLinesAsync(gitHubOutputPath, [
+                  $"package_id={id}",
+                  $"package_version={version.ToNormalizedString()}",
+                  $"package_is_prerelease={(version.IsPrerelease ? "true" : "false")}"
+              ]);
+
+              return 0;
+          }
+          catch (Exception e)
+          {
+              await Console.Error.WriteLineAsync($"Error: [{e.GetType().Name}] {e.Message}");
+              return -1;
+          }
+          CSHARP
+
+      - name: Resolve release metadata from Core package
+        id: resolve_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet run "$RUNNER_TEMP/get-package-version.cs" -- \
+            "$CORE_PACKAGE_PATH" \
+            "$GITHUB_OUTPUT"
+
+      - name: Verify package identities and versions
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.resolve_meta.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          found_meta=false
+          found_core=false
+
+          for package_path in "$PACKAGE_OUTPUT_DIR"/*.nupkg; do
+            metadata_path="$(mktemp)"
+            dotnet run "$RUNNER_TEMP/get-package-version.cs" -- \
+              "$package_path" \
+              "$metadata_path"
+
+            package_id="$(sed -n 's/^package_id=//p' "$metadata_path")"
+            package_version="$(sed -n 's/^package_version=//p' "$metadata_path")"
+            rm -f "$metadata_path"
+
+            if [ -z "$package_id" ] || [ -z "$package_version" ]; then
+              echo "The metadata extractor did not return an identity for '$package_path'."
+              exit 1
+            fi
+
+            if [ "$package_version" != "$EXPECTED_VERSION" ]; then
+              echo "Package '$package_id' has version '$package_version'; expected '$EXPECTED_VERSION'."
+              exit 1
+            fi
+
+            case "$package_id" in
+              "$CORE_PACKAGE_ID") found_core=true ;;
+              Sdl3Sharp)          found_meta=true ;;
+            esac
+          done
+
+          if [ "$found_core" != true ] || [ "$found_meta" != true ]; then
+            echo "The package set must include both '$CORE_PACKAGE_ID' and 'Sdl3Sharp'."
+            exit 1
+          fi
+
+      - name: Compute release tag
+        id: compute_release
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.resolve_meta.outputs.package_version }}
+        run: |
+          set -euo pipefail
+
+          echo "release_tag=v$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release tag and release do not already exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.compute_release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          tag_names="$(gh api "repos/$REPO/tags?per_page=100" --paginate --jq '.[].name')"
+          release_tags="$(gh api "repos/$REPO/releases?per_page=100" --paginate --jq '.[].tag_name')"
+
+          if grep -Fxq "$TAG" <<< "$tag_names"; then
+            echo "Tag '$TAG' already exists. Refusing to publish or create another release."
+            exit 1
+          fi
+
+          if grep -Fxq "$TAG" <<< "$release_tags"; then
+            echo "A GitHub Release for '$TAG' already exists. Refusing to publish or create another release."
+            exit 1
+          fi
+
+      - name: Build GitHub Release body
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NEW_TAG: ${{ steps.compute_release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          previous_tag="$(gh api "repos/$REPO/releases?per_page=1" --jq '.[0].tag_name // empty')"
+          body_path="$RUNNER_TEMP/release-body.md"
+
+          if [ -n "$previous_tag" ]; then
+            changelog_url="https://github.com/$REPO/compare/$previous_tag...$NEW_TAG"
+          else
+            changelog_url="https://github.com/$REPO/commits/$NEW_TAG"
+          fi
+
+          {
+            echo "## Changelog"
+            echo
+            echo "$changelog_url"
+            echo
+            echo "## NuGet packages"
+            echo
+          } > "$body_path"
+
+          for package_path in "$PACKAGE_OUTPUT_DIR"/*.nupkg; do
+            metadata_path="$(mktemp)"
+            dotnet run "$RUNNER_TEMP/get-package-version.cs" -- \
+              "$package_path" \
+              "$metadata_path"
+
+            package_id="$(sed -n 's/^package_id=//p' "$metadata_path")"
+            package_version="$(sed -n 's/^package_version=//p' "$metadata_path")"
+            rm -f "$metadata_path"
+
+            echo "- https://www.nuget.org/packages/$package_id/$package_version" >> "$body_path"
+          done
+
+          echo "RELEASE_BODY_PATH=$body_path" >> "$GITHUB_ENV"
+
+      - name: Push NuGet packages with Trusted Publishing
+        run: >-
+          ./make.sh push
+          --nuget-user "${{ secrets.NUGET_USER }}"
+          --oidc-provider github
+          --configuration Release
+          --fail-stale
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.compute_release.outputs.release_tag }}
+          IS_PRERELEASE: ${{ steps.resolve_meta.outputs.package_is_prerelease }}
+        run: |
+          set -euo pipefail
+
+          release_args=(
+            "$TAG"
+            --target "$GITHUB_SHA"
+            --title "$TAG"
+            --notes-file "$RELEASE_BODY_PATH"
+          )
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            release_args+=(--prerelease)
+          fi
+
+          gh release create "${release_args[@]}"
